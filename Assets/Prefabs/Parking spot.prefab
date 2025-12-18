@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 1625813807883305546}
   m_Layer: 0
   m_Name: Parking spot
-  m_TagString: Untagged
+  m_TagString: Parking spot
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
