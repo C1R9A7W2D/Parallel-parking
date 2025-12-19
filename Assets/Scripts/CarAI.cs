@@ -1,65 +1,147 @@
-using System.Collections.Generic;
 using UnityEngine;
+using System.Collections.Generic;
 
-public class CarAI : MonoBehaviour
+namespace ParkingSystem.FuzzySystem
 {
-    [SerializeField]
-    float rotation = 0;
-    [SerializeField]
-    Vector2 position = new Vector2(-10, 0.5f);
-    [SerializeField]
-    float sensorRange = 3f;
-    [SerializeField]
-    float maxSpeed = 3f;
-    [SerializeField]
-    bool movesForward = true;
-
-    private float speed = 1f;
-    private LayerMask targetMask;
-    private List<Transform> visibleCars;
-
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    /// <summary>
+    /// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ AI пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (2D пїЅпїЅпїЅпїЅпїЅпїЅ)
+    /// </summary>
+    [RequireComponent(typeof(Rigidbody2D))]
+    public class CarAI : MonoBehaviour
     {
-        transform.SetPositionAndRotation(position, Quaternion.Euler(0, 0, rotation));
-        targetMask = LayerMask.GetMask("Car");
-    }
+        [Header("пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ")]
+        [SerializeField] private float currentSpeed = 0f;
+        [SerializeField] private float maxSpeed = 3f;
+        [SerializeField] private float sensorRange = 3f;
+        [SerializeField] private bool movesForward = true;
 
-    // Update is called once per frame
-    void Update()
-    {
-        Quaternion rot = Quaternion.Euler(0, 0, rotation);
-        Vector3 moveDirection = (rot * Vector3.up).normalized;
-        transform.localPosition += moveDirection * speed * Time.deltaTime;
+        [Header("пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ")]
+        [SerializeField] private float rotationSpeed = 180f;
+        [SerializeField] private LayerMask obstacleMask = -1;
 
-        DetectTargets();
-    }
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+        private Rigidbody2D rb;
+        private List<Transform> visibleTargets = new List<Transform>();
 
-    void DetectTargets()
-    {
-        visibleCars = new List<Transform>();
-        Collider2D[] targetsInViewRadius = Physics2D.OverlapCircleAll(transform.position, sensorRange, targetMask);
-        foreach (Collider2D target in targetsInViewRadius)
+        // === пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ ===
+        public Vector2 Position => transform.position; // 2D пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+        public float Rotation => transform.eulerAngles.z; // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ Z пїЅ 2D
+        public float CurrentSpeed => currentSpeed;
+        public float MaxSpeed => maxSpeed;
+        public bool IsMovingForward => movesForward;
+        public float SensorRange => sensorRange;
+
+        void Start()
         {
-            visibleCars.Add(target.transform);
+            rb = GetComponent<Rigidbody2D>();
+            SetupRigidbody2D();
+
+            if (obstacleMask.value == -1)
+            {
+                obstacleMask = LayerMask.GetMask("Car", "Obstacle", "Wall");
+            }
         }
-    }
 
-    void ChangeSpeed(float delta)
-    {
-        speed += delta;
-    }
+        void FixedUpdate()
+        {
+            UpdateMovement();
+            DetectTargets();
+        }
 
-    void Rotate(float degrees)
-    {
-        rotation += degrees;
-        transform.Rotate(0, 0, degrees);
-    }
+        private void SetupRigidbody2D()
+        {
+            if (rb == null) return;
 
-    // Для визуализации в редакторе
-    void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, sensorRange);
+            rb.mass = 1000f;
+            rb.linearDamping = 0.5f;
+            rb.angularDamping = 5f;
+            rb.gravityScale = 0f; // пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+            rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+        }
+
+        private void UpdateMovement()
+        {
+            if (rb == null) return;
+
+            Vector2 moveDirection = movesForward ? transform.up : -transform.up;
+            rb.linearVelocity = moveDirection * currentSpeed;
+
+            if (rb.linearVelocity.magnitude > maxSpeed)
+            {
+                rb.linearVelocity = rb.linearVelocity.normalized * maxSpeed;
+            }
+        }
+
+        private void DetectTargets()
+        {
+            visibleTargets.Clear();
+
+            Collider2D[] targets = Physics2D.OverlapCircleAll(
+                transform.position,
+                sensorRange,
+                obstacleMask
+            );
+
+            foreach (Collider2D target in targets)
+            {
+                if (target.gameObject != gameObject && !target.isTrigger)
+                {
+                    visibleTargets.Add(target.transform);
+                }
+            }
+        }
+
+        // === пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ ===
+
+        public void ChangeSpeed(float delta)
+        {
+            currentSpeed = Mathf.Clamp(currentSpeed + delta, -maxSpeed, maxSpeed);
+
+            if (Mathf.Sign(currentSpeed) != (movesForward ? 1 : -1))
+            {
+                movesForward = currentSpeed >= 0;
+            }
+        }
+
+        public void Rotate(float degrees)
+        {
+            float speedFactor = 1f - Mathf.Abs(currentSpeed) / maxSpeed * 0.5f;
+            float maxRotation = rotationSpeed * Time.fixedDeltaTime * speedFactor;
+
+            degrees = Mathf.Clamp(degrees, -maxRotation, maxRotation);
+            transform.Rotate(0, 0, degrees);
+        }
+
+        public void SetSpeedImmediate(float newSpeed)
+        {
+            currentSpeed = Mathf.Clamp(newSpeed, -maxSpeed, maxSpeed);
+            movesForward = currentSpeed >= 0;
+        }
+
+        public void StopImmediate()
+        {
+            currentSpeed = 0f;
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector2.zero;
+                rb.angularVelocity = 0f;
+            }
+        }
+
+        public void ToggleMovementDirection()
+        {
+            movesForward = !movesForward;
+            currentSpeed = -currentSpeed;
+        }
+
+        void OnDrawGizmosSelected()
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(transform.position, sensorRange);
+
+            Gizmos.color = movesForward ? Color.green : Color.red;
+            Vector3 direction = movesForward ? transform.up : -transform.up;
+            Gizmos.DrawRay(transform.position, direction * 2f);
+        }
     }
 }
