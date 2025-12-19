@@ -70,13 +70,38 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 7613661812169894777, guid: 5b6f32b1a8090ea4fac4ff2823a1bdd0, type: 3}
       insertIndex: -1
+      addedObject: {fileID: 3123111483114426303}
+    - targetCorrespondingSourceObject: {fileID: 7613661812169894777, guid: 5b6f32b1a8090ea4fac4ff2823a1bdd0, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 8868842013833295125}
+    - targetCorrespondingSourceObject: {fileID: 7613661812169894777, guid: 5b6f32b1a8090ea4fac4ff2823a1bdd0, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5075976831405715360}
+    - targetCorrespondingSourceObject: {fileID: 7613661812169894777, guid: 5b6f32b1a8090ea4fac4ff2823a1bdd0, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8861396713700322409}
   m_SourcePrefab: {fileID: 100100000, guid: 5b6f32b1a8090ea4fac4ff2823a1bdd0, type: 3}
 --- !u!1 &5842648347235292359 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 7613661812169894777, guid: 5b6f32b1a8090ea4fac4ff2823a1bdd0, type: 3}
   m_PrefabInstance: {fileID: 4088257611540758462}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &3123111483114426303
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5842648347235292359}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 10072c684ed2ce84998d309d0593a1c1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CarMovement
+  acceleration: 1
+  deceleration: 0.5
+  maxSteerSpeed: 2
+  brakeSpeed: 3
 --- !u!114 &8868842013833295125
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -89,8 +114,46 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3ab2303dd52b35442912a62d5e271266, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  rotation: 270
-  position: {x: -10, y: 0}
-  sensorRange: 3
+  currentSpeed: 1
   maxSpeed: 3
+  sensorRange: 3
   movesForward: 1
+  rotationSpeed: 180
+  obstacleMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+--- !u!114 &5075976831405715360
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5842648347235292359}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76c392e42b5098c458856cdf6ecaaaa1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.EventSystems.EventSystem
+  m_FirstSelected: {fileID: 0}
+  m_sendNavigationEvents: 1
+  m_DragThreshold: 10
+--- !u!114 &8861396713700322409
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5842648347235292359}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f231c4fb786f3946a6b90b886c48677, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.EventSystems.StandaloneInputModule
+  m_SendPointerHoverToParent: 1
+  m_HorizontalAxis: Horizontal
+  m_VerticalAxis: Vertical
+  m_SubmitButton: Submit
+  m_CancelButton: Cancel
+  m_InputActionsPerSecond: 10
+  m_RepeatDelay: 0.5
+  m_ForceModuleActive: 0
