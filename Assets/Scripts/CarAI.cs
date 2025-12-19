@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class CarAI : MonoBehaviour
@@ -15,6 +16,7 @@ public class CarAI : MonoBehaviour
 
     private float speed = 1f;
     private LayerMask targetMask;
+    private List<Transform> visibleCars;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -35,16 +37,11 @@ public class CarAI : MonoBehaviour
 
     void DetectTargets()
     {
+        visibleCars = new List<Transform>();
         Collider2D[] targetsInViewRadius = Physics2D.OverlapCircleAll(transform.position, sensorRange, targetMask);
         foreach (Collider2D target in targetsInViewRadius)
         {
-            Vector3 dirToTarget = (target.transform.position - transform.position).normalized;
-            float distToTarget = Vector3.Distance(transform.position, target.transform.position);
-            if (!Physics.Raycast(transform.position, dirToTarget, distToTarget))
-            {
-                // Цель видна
-                //Debug.Log($"{target.name} обнаружен");
-            }
+            visibleCars.Add(target.transform);
         }
     }
 
