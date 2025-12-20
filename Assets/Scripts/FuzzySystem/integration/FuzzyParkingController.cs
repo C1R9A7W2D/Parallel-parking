@@ -282,14 +282,16 @@ namespace ParkingSystem.Integration
             if (input.sensorDistances == null || input.sensorDistances.Length == 0)
                 return false;
 
-            foreach (float distance in input.sensorDistances)
+            for (int i = 0; i < input.sensorDistances.Length; i++)
             {
+                float distance = input.sensorDistances[i];
                 if (distance < emergencyStopDistance)
                 {
+                    // ÄÎÁÀÂÜÒÅ ÝÒÓ ÑÒÐÎÊÓ:
+                    Debug.Log($"Äàò÷èê {i}: ðàññòîÿíèå {distance} < {emergencyStopDistance}");
                     return true;
                 }
             }
-
             return false;
         }
 

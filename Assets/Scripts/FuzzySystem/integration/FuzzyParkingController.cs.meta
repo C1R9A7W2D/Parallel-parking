@@ -1,2 +1,15 @@
 fileFormatVersion: 2
 guid: e59393abdbc2dd64ab88a35b3d05686d
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - carSpawner: {instanceID: 0}
+  - linguisticVariables: {fileID: 11400000, guid: aab5332ae1d0c7545a1da7d0817ed69d, type: 2}
+  - ruleBase: {fileID: 11400000, guid: 82ec7cb6eb0ac0d4a817ab95abb36ae8, type: 2}
+  - ruleEngineObject: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

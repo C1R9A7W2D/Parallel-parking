@@ -33,6 +33,8 @@ namespace ParkingSystem.FuzzySystem.Inputs
         public float timestamp;      // Время создания данных
         public int frameCount;       // Номер кадра
 
+        public Dictionary<string, float> timeStraight; // Время движения прямо
+
         /// <summary>
         /// Конструктор - инициализирует все словари
         /// </summary>
@@ -53,8 +55,8 @@ namespace ParkingSystem.FuzzySystem.Inputs
             currentSpeed = new Dictionary<string, float>();
             speedError = new Dictionary<string, float>();
 
-            timestamp = Time.time;
-            frameCount = Time.frameCount;
+            timestamp = 0f;
+            frameCount = 0;
         }
 
         /// <summary>

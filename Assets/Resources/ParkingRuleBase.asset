@@ -1,0 +1,1534 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bdc7cd8b695ef9a48aebea5983b2fe0e, type: 3}
+  m_Name: ParkingRuleBase
+  m_EditorClassIdentifier: Assembly-CSharp::ParkingSystem.FuzzySystem.Interfaces.FuzzyRuleBase
+  parkingRules:
+  - ruleName: RULE_001_SEARCH_SLOW_FORWARD
+    description: "\u041C\u0435\u0434\u043B\u0435\u043D\u043D\u043E\u0435 \u0434\u0432\u0438\u0436\u0435\u043D\u0438\u0435
+      \u0432\u043F\u0435\u0440\u0435\u0434 \u043F\u0440\u0438 \u043F\u043E\u0438\u0441\u043A\u0435
+      \u043C\u0435\u0441\u0442\u0430"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    - variableName: FrontDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.8
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.9
+  - ruleName: RULE_002_SEARCH_STOP_IF_OBSTACLE
+    description: "\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u043F\u0440\u0438
+      \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u0438\u0438 \u0431\u043B\u0438\u0437\u043A\u043E\u0433\u043E
+      \u043F\u0440\u0435\u043F\u044F\u0442\u0441\u0442\u0432\u0438\u044F \u0432\u043F\u0435\u0440\u0435\u0434\u0438"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: VeryClose
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: Brake
+      outputTerm: LightBrake
+      confidence: 0.7
+  - ruleName: RULE_003_SEARCH_TURN_RIGHT_IF_LEFT_CLOSE
+    description: "\u041F\u043E\u0432\u043E\u0440\u043E\u0442 \u0432\u043F\u0440\u0430\u0432\u043E
+      \u0435\u0441\u043B\u0438 \u0441\u043B\u0435\u0432\u0430 \u0431\u043B\u0438\u0437\u043A\u043E
+      \u043F\u0440\u0435\u043F\u044F\u0442\u0441\u0442\u0432\u0438\u0435"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LeftSideDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: RightSideDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightRight
+      confidence: 0.8
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.6
+  - ruleName: RULE_004_SEARCH_TURN_LEFT_IF_RIGHT_CLOSE
+    description: "\u041F\u043E\u0432\u043E\u0440\u043E\u0442 \u0432\u043B\u0435\u0432\u043E
+      \u0435\u0441\u043B\u0438 \u0441\u043F\u0440\u0430\u0432\u0430 \u0431\u043B\u0438\u0437\u043A\u043E
+      \u043F\u0440\u0435\u043F\u044F\u0442\u0441\u0442\u0432\u0438\u0435"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RightSideDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: LeftSideDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightLeft
+      confidence: 0.8
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.6
+  - ruleName: RULE_005_SEARCH_ACCELERATE_IF_CLEAR
+    description: "\u0423\u0441\u043A\u043E\u0440\u0435\u043D\u0438\u0435 \u0435\u0441\u043B\u0438
+      \u043F\u0443\u0442\u044C \u0441\u0432\u043E\u0431\u043E\u0434\u0435\u043D"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: VeryFar
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: Slow
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Forward
+      confidence: 0.7
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.9
+  - ruleName: RULE_006_SEARCH_SLOW_DOWN_IF_MEDIUM_CLOSE
+    description: "\u0417\u0430\u043C\u0435\u0434\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438
+      \u0441\u0440\u0435\u0434\u043D\u0435\u043C \u0440\u0430\u0441\u0441\u0442\u043E\u044F\u043D\u0438\u0438
+      \u0432\u043F\u0435\u0440\u0435\u0434\u0438"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: Medium
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: Fast
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.8
+    - outputVariable: Brake
+      outputTerm: LightBrake
+      confidence: 0.4
+  - ruleName: RULE_007_SEARCH_ZIGZAG_FOR_SPOT
+    description: "\u0417\u0438\u0433\u0437\u0430\u0433\u043E\u043E\u0431\u0440\u0430\u0437\u043D\u043E\u0435
+      \u0434\u0432\u0438\u0436\u0435\u043D\u0438\u0435 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430
+      \u043C\u0435\u0441\u0442\u0430"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: Far
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightLeft
+      confidence: 0.6
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.7
+  - ruleName: RULE_008_SEARCH_STOP_AND_CHECK
+    description: "\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u0434\u043B\u044F
+      \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u043E\u043A\u0440\u0443\u0436\u0430\u044E\u0449\u0435\u0439
+      \u043E\u0431\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0438"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: CurrentSpeed
+      termName: Stopped
+      operator: 0
+    - variableName: ParkingSpotWidth
+      termName: Wide
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Approaching
+      confidence: 0.8
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+  - ruleName: RULE_009_SEARCH_AVOID_DEAD_END
+    description: "\u0420\u0430\u0437\u0432\u043E\u0440\u043E\u0442 \u043F\u0440\u0438
+      \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u0438\u0438 \u0442\u0443\u043F\u0438\u043A\u0430"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: LeftSideDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: RightSideDistance
+      termName: VeryClose
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.9
+    - outputVariable: Steering
+      outputTerm: HardLeft
+      confidence: 0.8
+  - ruleName: RULE_010_SEARCH_FOLLOW_RIGHT_WALL
+    description: "\u0421\u043B\u0435\u0434\u043E\u0432\u0430\u043D\u0438\u0435 \u0432\u0434\u043E\u043B\u044C
+      \u043F\u0440\u0430\u0432\u043E\u0439 \u0441\u0442\u0435\u043D\u044B"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RightSideDistance
+      termName: Medium
+      operator: 0
+    - variableName: FrontDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightLeft
+      confidence: 0.6
+    - outputVariable: Throttle
+      outputTerm: Forward
+      confidence: 0.7
+  - ruleName: RULE_011_SEARCH_SCAN_AREA
+    description: "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435
+      \u043E\u0431\u043B\u0430\u0441\u0442\u0438 \u043F\u043E\u0438\u0441\u043A\u0430"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: CurrentSpeed
+      termName: Stopped
+      operator: 0
+    - variableName: ParkingSpotWidth
+      termName: VeryNarrow
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: HardRight
+      confidence: 0.7
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.5
+  - ruleName: RULE_012_SEARCH_KEEP_DISTANCE
+    description: "\u041F\u043E\u0434\u0434\u0435\u0440\u0436\u0430\u043D\u0438\u0435
+      \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0439 \u0434\u0438\u0441\u0442\u0430\u043D\u0446\u0438\u0438"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: Close
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: Medium
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 0.8
+    - outputVariable: Brake
+      outputTerm: LightBrake
+      confidence: 0.6
+  - ruleName: RULE_013_SEARCH_CHANGE_LANE
+    description: "\u041F\u0435\u0440\u0435\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435
+      \u0432 \u0434\u0440\u0443\u0433\u043E\u0439 \u0440\u044F\u0434"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LeftSideDistance
+      termName: VeryFar
+      operator: 0
+    - variableName: RightSideDistance
+      termName: VeryClose
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: Left
+      confidence: 0.8
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.6
+  - ruleName: RULE_014_SEARCH_REVERSE_IF_BLOCKED
+    description: "\u0414\u0432\u0438\u0436\u0435\u043D\u0438\u0435 \u043D\u0430\u0437\u0430\u0434
+      \u0435\u0441\u043B\u0438 \u043F\u0443\u0442\u044C \u0437\u0430\u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u0430\u043D"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: RearDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Reverse
+      confidence: 0.9
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 1
+  - ruleName: RULE_015_SEARCH_FIND_ALTERNATIVE
+    description: "\u041F\u043E\u0438\u0441\u043A \u0430\u043B\u044C\u0442\u0435\u0440\u043D\u0430\u0442\u0438\u0432\u043D\u043E\u0433\u043E
+      \u043F\u0443\u0442\u0438"
+    applicablePhase: 0
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: HardRight
+      confidence: 0.8
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.7
+  - ruleName: RULE_016_APPROACH_SLOW_TO_SPOT
+    description: "\u041C\u0435\u0434\u043B\u0435\u043D\u043D\u044B\u0439 \u043F\u043E\u0434\u044A\u0435\u0437\u0434
+      \u043A \u043D\u0430\u0439\u0434\u0435\u043D\u043D\u043E\u043C\u0443 \u043C\u0435\u0441\u0442\u0443"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: ParkingSpotWidth
+      termName: Wide
+      operator: 0
+    - variableName: FrontDistance
+      termName: Medium
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.9
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.8
+  - ruleName: RULE_017_APPROACH_ADJUST_ANGLE_SMALL_LEFT
+    description: "\u041A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u0443\u0433\u043B\u0430 \u043F\u043E\u0434\u044A\u0435\u0437\u0434\u0430 (\u043D\u0435\u0431\u043E\u043B\u044C\u0448\u043E\u0439
+      \u043B\u0435\u0432\u044B\u0439 \u043F\u043E\u0432\u043E\u0440\u043E\u0442)"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: ApproachAngle
+      termName: SmallRight
+      operator: 0
+    - variableName: FrontDistance
+      termName: Close
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightLeft
+      confidence: 0.7
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.6
+  - ruleName: RULE_018_APPROACH_ADJUST_ANGLE_SMALL_RIGHT
+    description: "\u041A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u0443\u0433\u043B\u0430 \u043F\u043E\u0434\u044A\u0435\u0437\u0434\u0430 (\u043D\u0435\u0431\u043E\u043B\u044C\u0448\u043E\u0439
+      \u043F\u0440\u0430\u0432\u044B\u0439 \u043F\u043E\u0432\u043E\u0440\u043E\u0442)"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: ApproachAngle
+      termName: SmallLeft
+      operator: 0
+    - variableName: FrontDistance
+      termName: Close
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightRight
+      confidence: 0.7
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.6
+  - ruleName: RULE_019_APPROACH_STOP_BEFORE_MANEUVER
+    description: "\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u043F\u0435\u0440\u0435\u0434
+      \u043D\u0430\u0447\u0430\u043B\u043E\u043C \u043C\u0430\u043D\u0435\u0432\u0440\u0430
+      \u043F\u0430\u0440\u043A\u043E\u0432\u043A\u0438"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LongitudinalError
+      termName: Small
+      operator: 0
+    - variableName: FrontDistance
+      termName: Close
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: Brake
+      outputTerm: MediumBrake
+      confidence: 0.8
+    - outputVariable: ParkingPhase
+      outputTerm: Aligning
+      confidence: 0.9
+  - ruleName: RULE_020_APPROACH_BACK_UP_IF_TOO_CLOSE
+    description: "\u041E\u0442\u044A\u0435\u0437\u0434 \u043D\u0430\u0437\u0430\u0434
+      \u0435\u0441\u043B\u0438 \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043B\u0438\u0437\u043A\u043E
+      \u043A \u043C\u0435\u0441\u0442\u0443"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.8
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.9
+  - ruleName: RULE_021_APPROACH_CENTER_TO_SPOT
+    description: "\u0426\u0435\u043D\u0442\u0440\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435
+      \u043E\u0442\u043D\u043E\u0441\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u043C\u0435\u0441\u0442\u0430"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LateralError
+      termName: Medium
+      operator: 0
+    - variableName: FrontDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightRight
+      confidence: 0.6
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.7
+  - ruleName: RULE_022_APPROACH_CHECK_SIDES
+    description: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0431\u043E\u043A\u043E\u0432\u044B\u0445
+      \u0440\u0430\u0441\u0441\u0442\u043E\u044F\u043D\u0438\u0439 \u043F\u0440\u0438
+      \u043F\u043E\u0434\u044A\u0435\u0437\u0434\u0435"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LeftSideDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: RightSideDistance
+      termName: VeryClose
+      operator: 3
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: ParkingPhase
+      outputTerm: Searching
+      confidence: 0.7
+  - ruleName: RULE_023_APPROACH_CALCULATE_ANGLE
+    description: "\u0420\u0430\u0441\u0447\u0435\u0442 \u043E\u043F\u0442\u0438\u043C\u0430\u043B\u044C\u043D\u043E\u0433\u043E
+      \u0443\u0433\u043B\u0430 \u043F\u043E\u0434\u044A\u0435\u0437\u0434\u0430"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: ApproachAngle
+      termName: LargeLeft
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: Right
+      confidence: 0.8
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.5
+  - ruleName: RULE_024_APPROACH_SPOT_TOO_NARROW
+    description: "\u041C\u0435\u0441\u0442\u043E \u0441\u043B\u0438\u0448\u043A\u043E\u043C
+      \u0443\u0437\u043A\u043E\u0435 - \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C
+      \u043F\u043E\u0438\u0441\u043A"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: ParkingSpotWidth
+      termName: VeryNarrow
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Searching
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.7
+  - ruleName: RULE_025_APPROACH_PERFECT_ANGLE
+    description: "\u0418\u0434\u0435\u0430\u043B\u044C\u043D\u044B\u0439 \u0443\u0433\u043E\u043B
+      \u043F\u043E\u0434\u044A\u0435\u0437\u0434\u0430 \u0434\u043E\u0441\u0442\u0438\u0433\u043D\u0443\u0442"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: ApproachAngle
+      termName: Aligned
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: ParkingPhase
+      outputTerm: Aligning
+      confidence: 0.9
+  - ruleName: RULE_026_APPROACH_ALIGN_LATERAL
+    description: "\u0411\u043E\u043A\u043E\u0432\u043E\u0435 \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435
+      \u043F\u0440\u0438 \u043F\u043E\u0434\u044A\u0435\u0437\u0434\u0435"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LateralError
+      termName: Large
+      operator: 0
+    - variableName: FrontDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: HardRight
+      confidence: 0.7
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.6
+  - ruleName: RULE_027_APPROACH_CHECK_REAR
+    description: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043F\u0440\u043E\u0441\u0442\u0440\u0430\u043D\u0441\u0442\u0432\u0430
+      \u0441\u0437\u0430\u0434\u0438"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RearDistance
+      termName: VeryClose
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.8
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.9
+  - ruleName: RULE_028_APPROACH_ADJUST_SPEED
+    description: "\u041A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u0441\u043A\u043E\u0440\u043E\u0441\u0442\u0438 \u043F\u043E\u0434\u044A\u0435\u0437\u0434\u0430"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: SpeedError
+      termName: LargePositive
+      operator: 0
+    - variableName: FrontDistance
+      termName: Close
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 0.9
+    - outputVariable: Brake
+      outputTerm: LightBrake
+      confidence: 0.7
+  - ruleName: RULE_029_APPROACH_PREPARE_REVERSE
+    description: "\u041F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u043A\u0430 \u043A
+      \u0437\u0430\u0434\u043D\u0435\u043C\u0443 \u0445\u043E\u0434\u0443"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LongitudinalError
+      termName: VerySmall
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: Stopped
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Aligning
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+  - ruleName: RULE_030_APPROACH_ABORT_BAD_ANGLE
+    description: "\u041F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u0435 \u043F\u0440\u0438
+      \u043F\u043B\u043E\u0445\u043E\u043C \u0443\u0433\u043B\u0435"
+    applicablePhase: 1
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: ApproachAngle
+      termName: LargeRight
+      operator: 0
+    - variableName: FrontDistance
+      termName: VeryClose
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Reverse
+      confidence: 0.9
+    - outputVariable: ParkingPhase
+      outputTerm: Searching
+      confidence: 0.8
+  - ruleName: RULE_031_ALIGN_HARD_LEFT_STEER
+    description: "\u0420\u0435\u0437\u043A\u0438\u0439 \u043B\u0435\u0432\u044B\u0439
+      \u043F\u043E\u0432\u043E\u0440\u043E\u0442 \u0434\u043B\u044F \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u044F"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: LargeRight
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: HardLeft
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.5
+  - ruleName: RULE_032_ALIGN_HARD_RIGHT_STEER
+    description: "\u0420\u0435\u0437\u043A\u0438\u0439 \u043F\u0440\u0430\u0432\u044B\u0439
+      \u043F\u043E\u0432\u043E\u0440\u043E\u0442 \u0434\u043B\u044F \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u044F"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: LargeLeft
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: HardRight
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.5
+  - ruleName: RULE_033_ALIGN_SLIGHT_CORRECTION_LEFT
+    description: "\u041D\u0435\u0431\u043E\u043B\u044C\u0448\u0430\u044F \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u0432\u043B\u0435\u0432\u043E"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: SmallRight
+      operator: 0
+    - variableName: LateralError
+      termName: Small
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightLeft
+      confidence: 0.7
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 0.8
+  - ruleName: RULE_034_ALIGN_SLIGHT_CORRECTION_RIGHT
+    description: "\u041D\u0435\u0431\u043E\u043B\u044C\u0448\u0430\u044F \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u0432\u043F\u0440\u0430\u0432\u043E"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: SmallLeft
+      operator: 0
+    - variableName: LateralError
+      termName: Small
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightRight
+      confidence: 0.7
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 0.8
+  - ruleName: RULE_035_ALIGN_PERFECT_ALIGNMENT
+    description: "\u0418\u0434\u0435\u0430\u043B\u044C\u043D\u043E\u0435 \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435
+      - \u043D\u0430\u0447\u0430\u043B\u043E \u0437\u0430\u0434\u043D\u0435\u0433\u043E
+      \u0445\u043E\u0434\u0430"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: Aligned
+      operator: 0
+    - variableName: LateralError
+      termName: VerySmall
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Reversing
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.7
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 1
+  - ruleName: RULE_036_ALIGN_STOP_IF_SIDE_CLOSE
+    description: "\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u0435\u0441\u043B\u0438
+      \u0441\u0431\u043E\u043A\u0443 \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043B\u0438\u0437\u043A\u043E"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LeftSideDistance
+      termName: VeryClose
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: Brake
+      outputTerm: HardBrake
+      confidence: 0.9
+  - ruleName: RULE_037_ALIGN_ADJUST_POSITION_FORWARD
+    description: "\u041A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u043F\u043E\u0437\u0438\u0446\u0438\u0438 \u0434\u0432\u0438\u0436\u0435\u043D\u0438\u0435\u043C
+      \u0432\u043F\u0435\u0440\u0435\u0434"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LongitudinalError
+      termName: Large
+      operator: 0
+    - variableName: FrontDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.7
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.9
+  - ruleName: RULE_038_ALIGN_CHECK_PARALLEL
+    description: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043F\u0430\u0440\u0430\u043B\u043B\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u0438
+      \u0430\u0432\u0442\u043E\u043C\u043E\u0431\u0438\u043B\u044F"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: Aligned
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: Stopped
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Reversing
+      confidence: 0.8
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+  - ruleName: RULE_039_ALIGN_MINOR_ADJUSTMENT
+    description: "\u041D\u0435\u0437\u043D\u0430\u0447\u0438\u0442\u0435\u043B\u044C\u043D\u0430\u044F
+      \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: SmallLeft
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: Stopped
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightRight
+      confidence: 0.6
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 0.9
+  - ruleName: RULE_040_ALIGN_CENTER_IN_SPOT
+    description: "\u0426\u0435\u043D\u0442\u0440\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435
+      \u0432 \u043F\u0430\u0440\u043A\u043E\u0432\u043E\u0447\u043D\u043E\u043C \u043C\u0435\u0441\u0442\u0435"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LateralError
+      termName: Medium
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.8
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.5
+  - ruleName: RULE_041_ALIGN_REVERSE_TO_ADJUST
+    description: "\u0414\u0432\u0438\u0436\u0435\u043D\u0438\u0435 \u043D\u0430\u0437\u0430\u0434
+      \u0434\u043B\u044F \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0438"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: LargeLeft
+      operator: 0
+    - variableName: RearDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: HardRight
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: Reverse
+      confidence: 0.7
+  - ruleName: RULE_042_ALIGN_FORWARD_TO_ADJUST
+    description: "\u0414\u0432\u0438\u0436\u0435\u043D\u0438\u0435 \u0432\u043F\u0435\u0440\u0435\u0434
+      \u0434\u043B\u044F \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0438"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: LargeRight
+      operator: 0
+    - variableName: FrontDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: HardLeft
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.7
+  - ruleName: RULE_043_ALIGN_SIDE_CLEARANCE_CHECK
+    description: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0431\u043E\u043A\u043E\u0432\u043E\u0433\u043E
+      \u0437\u0430\u0437\u043E\u0440\u0430"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LeftSideDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: RightSideDistance
+      termName: VeryClose
+      operator: 3
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Adjusting
+      confidence: 0.8
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+  - ruleName: RULE_044_ALIGN_READY_FOR_REVERSE
+    description: "\u0413\u043E\u0442\u043E\u0432\u043D\u043E\u0441\u0442\u044C \u043A
+      \u0437\u0430\u0434\u043D\u0435\u043C\u0443 \u0445\u043E\u0434\u0443"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: Aligned
+      operator: 0
+    - variableName: LateralError
+      termName: Small
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Reversing
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.8
+  - ruleName: RULE_045_ALIGN_ABORT_PARKING
+    description: "\u041F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u0435 \u043F\u0430\u0440\u043A\u043E\u0432\u043A\u0438
+      \u043F\u0440\u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u0430\u0445"
+    applicablePhase: 2
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: RearDistance
+      termName: VeryClose
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Emergency
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+  - ruleName: RULE_046_REVERSE_SLOW_BACKWARD
+    description: "\u041C\u0435\u0434\u043B\u0435\u043D\u043D\u043E\u0435 \u0434\u0432\u0438\u0436\u0435\u043D\u0438\u0435
+      \u043D\u0430\u0437\u0430\u0434 \u0432 \u043F\u0430\u0440\u043A\u043E\u0432\u043E\u0447\u043D\u043E\u0435
+      \u043C\u0435\u0441\u0442\u043E"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RearDistance
+      termName: Far
+      operator: 0
+    - variableName: AlignmentAngle
+      termName: Aligned
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.8
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.9
+  - ruleName: RULE_047_REVERSE_STEER_LEFT_IF_RIGHT_CLOSE
+    description: "\u041F\u043E\u0432\u043E\u0440\u043E\u0442 \u0432\u043B\u0435\u0432\u043E
+      \u043F\u0440\u0438 \u0437\u0430\u0434\u043D\u0435\u043C \u0445\u043E\u0434\u0435
+      \u0435\u0441\u043B\u0438 \u0441\u043F\u0440\u0430\u0432\u0430 \u0431\u043B\u0438\u0437\u043A\u043E"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RightSideDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: RearDistance
+      termName: Medium
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: Left
+      confidence: 0.7
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.6
+  - ruleName: RULE_048_REVERSE_STEER_RIGHT_IF_LEFT_CLOSE
+    description: "\u041F\u043E\u0432\u043E\u0440\u043E\u0442 \u0432\u043F\u0440\u0430\u0432\u043E
+      \u043F\u0440\u0438 \u0437\u0430\u0434\u043D\u0435\u043C \u0445\u043E\u0434\u0435
+      \u0435\u0441\u043B\u0438 \u0441\u043B\u0435\u0432\u0430 \u0431\u043B\u0438\u0437\u043A\u043E"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LeftSideDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: RearDistance
+      termName: Medium
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: Right
+      confidence: 0.7
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.6
+  - ruleName: RULE_049_REVERSE_STOP_IF_REAR_CLOSE
+    description: "\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u0435\u0441\u043B\u0438
+      \u0441\u0437\u0430\u0434\u0438 \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043B\u0438\u0437\u043A\u043E"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RearDistance
+      termName: VeryClose
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: Brake
+      outputTerm: HardBrake
+      confidence: 0.9
+    - outputVariable: ParkingPhase
+      outputTerm: Adjusting
+      confidence: 0.8
+  - ruleName: RULE_050_REVERSE_CORRECT_ANGLE_SLIGHT_LEFT
+    description: "\u041A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u0443\u0433\u043B\u0430 \u043D\u0435\u0431\u043E\u043B\u044C\u0448\u0438\u043C
+      \u043F\u043E\u0432\u043E\u0440\u043E\u0442\u043E\u043C \u0432\u043B\u0435\u0432\u043E"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: SmallRight
+      operator: 0
+    - variableName: RearDistance
+      termName: Close
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightLeft
+      confidence: 0.6
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.5
+  - ruleName: RULE_051_REVERSE_CORRECT_ANGLE_SLIGHT_RIGHT
+    description: "\u041A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u0443\u0433\u043B\u0430 \u043D\u0435\u0431\u043E\u043B\u044C\u0448\u0438\u043C
+      \u043F\u043E\u0432\u043E\u0440\u043E\u0442\u043E\u043C \u0432\u043F\u0440\u0430\u0432\u043E"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: SmallLeft
+      operator: 0
+    - variableName: RearDistance
+      termName: Close
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightRight
+      confidence: 0.6
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.5
+  - ruleName: RULE_052_REVERSE_ACCELERATE_SLIGHTLY
+    description: "\u041B\u0435\u0433\u043A\u043E\u0435 \u0443\u0441\u043A\u043E\u0440\u0435\u043D\u0438\u0435
+      \u0435\u0441\u043B\u0438 \u043F\u0443\u0442\u044C \u0441\u0432\u043E\u0431\u043E\u0434\u0435\u043D"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RearDistance
+      termName: VeryFar
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Reverse
+      confidence: 0.7
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.9
+  - ruleName: RULE_053_REVERSE_CHECK_FRONT_CLEARANCE
+    description: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043F\u0435\u0440\u0435\u0434\u043D\u0435\u0433\u043E
+      \u0437\u0430\u0437\u043E\u0440\u0430"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: VeryClose
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: ParkingPhase
+      outputTerm: Adjusting
+      confidence: 0.8
+  - ruleName: RULE_054_REVERSE_STRAIGHTEN_WHEELS
+    description: "\u0412\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435
+      \u043A\u043E\u043B\u0435\u0441 \u043F\u0440\u0438 \u0434\u0432\u0438\u0436\u0435\u043D\u0438\u0438
+      \u043D\u0430\u0437\u0430\u0434"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: Aligned
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 1
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.8
+  - ruleName: RULE_055_REVERSE_CORRECT_LATERAL_ERROR
+    description: "\u041A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043E\u0448\u0438\u0431\u043A\u0438"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LateralError
+      termName: Medium
+      operator: 0
+    - variableName: RearDistance
+      termName: Medium
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightRight
+      confidence: 0.6
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.5
+  - ruleName: RULE_056_REVERSE_AVOID_SIDE_CONTACT
+    description: "\u0418\u0437\u0431\u0435\u0436\u0430\u043D\u0438\u0435 \u0431\u043E\u043A\u043E\u0432\u043E\u0433\u043E
+      \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LeftSideDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: RightSideDistance
+      termName: VeryClose
+      operator: 3
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: ParkingPhase
+      outputTerm: Emergency
+      confidence: 0.9
+  - ruleName: RULE_057_REVERSE_APPROACH_COMPLETE
+    description: "\u041F\u0440\u0438\u0431\u043B\u0438\u0436\u0435\u043D\u0438\u0435
+      \u043A \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044E \u0437\u0430\u0434\u043D\u0435\u0433\u043E
+      \u0445\u043E\u0434\u0430"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RearDistance
+      termName: Close
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: VerySlow
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: ParkingPhase
+      outputTerm: Adjusting
+      confidence: 0.9
+  - ruleName: RULE_058_REVERSE_EMERGENCY_STOP
+    description: "\u0410\u0432\u0430\u0440\u0438\u0439\u043D\u0430\u044F \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430
+      \u043F\u0440\u0438 \u0437\u0430\u0434\u043D\u0435\u043C \u0445\u043E\u0434\u0435"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RearDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: Medium
+      operator: 0
+    actions:
+    - outputVariable: Brake
+      outputTerm: EmergencyBrake
+      confidence: 1
+    - outputVariable: ParkingPhase
+      outputTerm: Emergency
+      confidence: 1
+  - ruleName: RULE_059_REVERSE_READJUST_IF_NEEDED
+    description: "\u041F\u043E\u0432\u0442\u043E\u0440\u043D\u0430\u044F \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u043F\u0440\u0438 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E\u0441\u0442\u0438"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: LargeLeft
+      operator: 0
+    - variableName: RearDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Aligning
+      confidence: 0.8
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.7
+  - ruleName: RULE_060_REVERSE_COMPLETE_SUCCESS
+    description: "\u0423\u0441\u043F\u0435\u0448\u043D\u043E\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u0435
+      \u0437\u0430\u0434\u043D\u0435\u0433\u043E \u0445\u043E\u0434\u0430"
+    applicablePhase: 3
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RearDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: Stopped
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Adjusting
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+  - ruleName: RULE_061_ADJUST_FORWARD_IF_TOO_DEEP
+    description: "\u0414\u0432\u0438\u0436\u0435\u043D\u0438\u0435 \u0432\u043F\u0435\u0440\u0435\u0434
+      \u0435\u0441\u043B\u0438 \u0437\u0430\u0435\u0445\u0430\u043B \u0441\u043B\u0438\u0448\u043A\u043E\u043C
+      \u0433\u043B\u0443\u0431\u043E\u043A\u043E"
+    applicablePhase: 4
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RearDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: FrontDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.8
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.9
+  - ruleName: RULE_062_ADJUST_BACKWARD_IF_TOO_SHALLOW
+    description: "\u0414\u0432\u0438\u0436\u0435\u043D\u0438\u0435 \u043D\u0430\u0437\u0430\u0434
+      \u0435\u0441\u043B\u0438 \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E
+      \u0433\u043B\u0443\u0431\u043E\u043A\u043E"
+    applicablePhase: 4
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: RearDistance
+      termName: Far
+      operator: 0
+    - variableName: FrontDistance
+      termName: Close
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.8
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.9
+  - ruleName: RULE_063_ADJUST_CENTER_LEFT_RIGHT
+    description: "\u0426\u0435\u043D\u0442\u0440\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435
+      \u0432\u043B\u0435\u0432\u043E-\u0432\u043F\u0440\u0430\u0432\u043E"
+    applicablePhase: 4
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LateralError
+      termName: Medium
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: Stopped
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightRight
+      confidence: 0.6
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.5
+  - ruleName: RULE_064_ADJUST_COMPLETE_PARKING
+    description: "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u0435 \u043F\u0430\u0440\u043A\u043E\u0432\u043A\u0438
+      - \u0443\u0441\u043F\u0435\u0445"
+    applicablePhase: 4
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: Aligned
+      operator: 0
+    - variableName: LateralError
+      termName: VerySmall
+      operator: 0
+    - variableName: LongitudinalError
+      termName: VerySmall
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Completed
+      confidence: 1
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: Brake
+      outputTerm: HardBrake
+      confidence: 1
+  - ruleName: RULE_065_ADJUST_MINOR_CORRECTION_FORWARD
+    description: "\u041D\u0435\u0437\u043D\u0430\u0447\u0438\u0442\u0435\u043B\u044C\u043D\u0430\u044F
+      \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u0432\u043F\u0435\u0440\u0435\u0434"
+    applicablePhase: 4
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LongitudinalError
+      termName: Small
+      operator: 0
+    - variableName: FrontDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowForward
+      confidence: 0.6
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.9
+  - ruleName: RULE_066_ADJUST_MINOR_CORRECTION_BACKWARD
+    description: "\u041D\u0435\u0437\u043D\u0430\u0447\u0438\u0442\u0435\u043B\u044C\u043D\u0430\u044F
+      \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0430
+      \u043D\u0430\u0437\u0430\u0434"
+    applicablePhase: 4
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LongitudinalError
+      termName: Small
+      operator: 0
+    - variableName: RearDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: SlowReverse
+      confidence: 0.6
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 0.9
+  - ruleName: RULE_067_ADJUST_SIDE_CLEARANCE_CHECK
+    description: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0431\u043E\u043A\u043E\u0432\u043E\u0433\u043E
+      \u0437\u0430\u0437\u043E\u0440\u0430 \u043F\u0440\u0438 \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u043A\u0435"
+    applicablePhase: 4
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: LeftSideDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: RightSideDistance
+      termName: VeryClose
+      operator: 3
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: ParkingPhase
+      outputTerm: Completed
+      confidence: 0.8
+  - ruleName: RULE_068_ADJUST_ALIGN_WHEELS
+    description: "\u0412\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435
+      \u043A\u043E\u043B\u0435\u0441 \u043F\u0435\u0440\u0435\u0434 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u0435\u043C"
+    applicablePhase: 4
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: AlignmentAngle
+      termName: SmallLeft
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: Stopped
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: SlightRight
+      confidence: 0.7
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+  - ruleName: RULE_069_ADJUST_FINAL_CHECK
+    description: "\u0424\u0438\u043D\u0430\u043B\u044C\u043D\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430
+      \u043F\u0435\u0440\u0435\u0434 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u0435\u043C"
+    applicablePhase: 4
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: CurrentSpeed
+      termName: Stopped
+      operator: 0
+    - variableName: LateralError
+      termName: VerySmall
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Completed
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+  - ruleName: RULE_070_EMERGENCY_FULL_STOP
+    description: "\u041F\u043E\u043B\u043D\u0430\u044F \u0430\u0432\u0430\u0440\u0438\u0439\u043D\u0430\u044F
+      \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430"
+    applicablePhase: 6
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: CurrentSpeed
+      termName: Fast
+      operator: 3
+    actions:
+    - outputVariable: Brake
+      outputTerm: EmergencyBrake
+      confidence: 1
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+    - outputVariable: ParkingPhase
+      outputTerm: Emergency
+      confidence: 1
+  - ruleName: RULE_071_EMERGENCY_AVOID_COLLISION
+    description: "\u042D\u043A\u0441\u0442\u0440\u0435\u043D\u043D\u043E\u0435 \u0443\u043A\u043B\u043E\u043D\u0435\u043D\u0438\u0435
+      \u043E\u0442 \u0441\u0442\u043E\u043B\u043A\u043D\u043E\u0432\u0435\u043D\u0438\u044F"
+    applicablePhase: 6
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: LeftSideDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Steering
+      outputTerm: HardLeft
+      confidence: 0.9
+    - outputVariable: Throttle
+      outputTerm: FullForward
+      confidence: 0.8
+  - ruleName: RULE_072_EMERGENCY_STOP_AND_ASSESS
+    description: "\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u0438 \u043E\u0446\u0435\u043D\u043A\u0430
+      \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0438"
+    applicablePhase: 6
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: CurrentSpeed
+      termName: Fast
+      operator: 0
+    actions:
+    - outputVariable: Brake
+      outputTerm: HardBrake
+      confidence: 1
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+  - ruleName: RULE_073_EMERGENCY_CLEAR_PATH
+    description: "\u041E\u0441\u0432\u043E\u0431\u043E\u0436\u0434\u0435\u043D\u0438\u0435
+      \u043F\u0443\u0442\u0438 \u043F\u0440\u0438 \u0430\u0432\u0430\u0440\u0438\u0439\u043D\u043E\u0439
+      \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0438"
+    applicablePhase: 6
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: FrontDistance
+      termName: VeryClose
+      operator: 0
+    - variableName: RearDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: Throttle
+      outputTerm: Reverse
+      confidence: 0.9
+    - outputVariable: Steering
+      outputTerm: Center
+      confidence: 1
+  - ruleName: RULE_074_EMERGENCY_RESTART_SYSTEM
+    description: "\u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u043A \u0441\u0438\u0441\u0442\u0435\u043C\u044B
+      \u043F\u043E\u0441\u043B\u0435 \u0430\u0432\u0430\u0440\u0438\u0438"
+    applicablePhase: 6
+    isEnabled: 1
+    weight: 1
+    conditions:
+    - variableName: CurrentSpeed
+      termName: Stopped
+      operator: 0
+    - variableName: FrontDistance
+      termName: Far
+      operator: 0
+    actions:
+    - outputVariable: ParkingPhase
+      outputTerm: Searching
+      confidence: 0.8
+    - outputVariable: Throttle
+      outputTerm: Zero
+      confidence: 1
+  ruleWeightMultiplier: 1
+  defuzzMethod: 0
+  aggregationMethod: 0
+  totalRules: 74
+  enabledRules: 74
+  rulesByPhaseSearching: 15
+  rulesByPhaseApproaching: 15
+  rulesByPhaseAligning: 15
+  rulesByPhaseReversing: 15
+  rulesByPhaseAdjusting: 9
+  rulesByPhaseCompleted: 0
+  rulesByPhaseEmergency: 5

@@ -52,7 +52,7 @@ namespace ParkingSystem.FuzzySystem.Inputs
                 // 5. Фаззификация позиционных ошибок
                 FuzzifyPositionErrors(crispInput, fuzzyData);
 
-                // 6. Установка метаданных
+                // 6. Установка метаданных (используем значения из crispInput)
                 fuzzyData.timestamp = crispInput.timestamp;
                 fuzzyData.frameCount = crispInput.frameCount;
             }
@@ -96,6 +96,11 @@ namespace ParkingSystem.FuzzySystem.Inputs
                     "RightSideDistance"
                 );
             }
+            // После блока, где создаются fuzzyData.frontDistance и другие, добавьте:
+            if (fuzzyData.frontDistance.ContainsKey("Close"))
+                Debug.Log($"Front is 'Close': {fuzzyData.frontDistance["Close"]}");
+            if (fuzzyData.rearDistance.ContainsKey("Far"))
+                Debug.Log($"Rear is 'Far': {fuzzyData.rearDistance["Far"]}");
         }
 
         /// <summary>

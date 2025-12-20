@@ -1,0 +1,405 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8c5f8a748d440de458d997cf710c1b6e, type: 3}
+  m_Name: DefaultLinguisticVars
+  m_EditorClassIdentifier: Assembly-CSharp::ParkingSystem.FuzzySystem.Inputs.LinguisticVariables
+  frontDistance:
+    name: FrontDistance
+    minValue: 0
+    maxValue: 10
+    fuzzySets:
+    - name: VeryClose
+      type: 0
+      parameters:
+      - 0
+      - 0
+      - 1
+    - name: Close
+      type: 0
+      parameters:
+      - 0.5
+      - 1.5
+      - 2.5
+    - name: Medium
+      type: 0
+      parameters:
+      - 2
+      - 3
+      - 4
+    - name: Far
+      type: 0
+      parameters:
+      - 3
+      - 5
+      - 7
+    - name: VeryFar
+      type: 0
+      parameters:
+      - 6
+      - 10
+      - 10
+  rearDistance:
+    name: RearDistance
+    minValue: 0
+    maxValue: 10
+    fuzzySets:
+    - name: VeryClose
+      type: 0
+      parameters:
+      - 0
+      - 0
+      - 1
+    - name: Close
+      type: 0
+      parameters:
+      - 0.5
+      - 1.5
+      - 2.5
+    - name: Medium
+      type: 0
+      parameters:
+      - 2
+      - 3
+      - 4
+    - name: Far
+      type: 0
+      parameters:
+      - 3
+      - 5
+      - 7
+    - name: VeryFar
+      type: 0
+      parameters:
+      - 6
+      - 10
+      - 10
+  leftSideDistance:
+    name: LeftSideDistance
+    minValue: 0
+    maxValue: 5
+    fuzzySets:
+    - name: VeryClose
+      type: 0
+      parameters:
+      - 0
+      - 0
+      - 1
+    - name: Close
+      type: 0
+      parameters:
+      - 0.5
+      - 1.5
+      - 2.5
+    - name: Medium
+      type: 0
+      parameters:
+      - 2
+      - 3
+      - 4
+    - name: Far
+      type: 0
+      parameters:
+      - 3
+      - 4
+      - 5
+    - name: VeryFar
+      type: 0
+      parameters:
+      - 4
+      - 5
+      - 5
+  rightSideDistance:
+    name: RightSideDistance
+    minValue: 0
+    maxValue: 5
+    fuzzySets:
+    - name: VeryClose
+      type: 0
+      parameters:
+      - 0
+      - 0
+      - 1
+    - name: Close
+      type: 0
+      parameters:
+      - 0.5
+      - 1.5
+      - 2.5
+    - name: Medium
+      type: 0
+      parameters:
+      - 2
+      - 3
+      - 4
+    - name: Far
+      type: 0
+      parameters:
+      - 3
+      - 4
+      - 5
+    - name: VeryFar
+      type: 0
+      parameters:
+      - 4
+      - 5
+      - 5
+  parkingSpotWidth:
+    name: ParkingSpotWidth
+    minValue: 2
+    maxValue: 4
+    fuzzySets:
+    - name: VeryNarrow
+      type: 0
+      parameters:
+      - 2
+      - 2
+      - 2.5
+    - name: Narrow
+      type: 0
+      parameters:
+      - 2
+      - 2.5
+      - 3
+    - name: Medium
+      type: 0
+      parameters:
+      - 2.5
+      - 3
+      - 3.5
+    - name: Wide
+      type: 0
+      parameters:
+      - 3
+      - 3.5
+      - 4
+    - name: VeryWide
+      type: 0
+      parameters:
+      - 3.5
+      - 4
+      - 4
+  alignmentAngle:
+    name: AlignmentAngle
+    minValue: -45
+    maxValue: 45
+    fuzzySets:
+    - name: LargeLeft
+      type: 0
+      parameters:
+      - -45
+      - -45
+      - -25
+    - name: SmallLeft
+      type: 0
+      parameters:
+      - -30
+      - -15
+      - 0
+    - name: Aligned
+      type: 0
+      parameters:
+      - -10
+      - 0
+      - 10
+    - name: SmallRight
+      type: 0
+      parameters:
+      - 0
+      - 15
+      - 30
+    - name: LargeRight
+      type: 0
+      parameters:
+      - 25
+      - 45
+      - 45
+  approachAngle:
+    name: ApproachAngle
+    minValue: -90
+    maxValue: 90
+    fuzzySets:
+    - name: LargeLeft
+      type: 0
+      parameters:
+      - -90
+      - -90
+      - -45
+    - name: SmallLeft
+      type: 0
+      parameters:
+      - -60
+      - -30
+      - 0
+    - name: Aligned
+      type: 0
+      parameters:
+      - -15
+      - 0
+      - 15
+    - name: SmallRight
+      type: 0
+      parameters:
+      - 0
+      - 30
+      - 60
+    - name: LargeRight
+      type: 0
+      parameters:
+      - 45
+      - 90
+      - 90
+  lateralError:
+    name: LateralError
+    minValue: 0
+    maxValue: 2
+    fuzzySets:
+    - name: VerySmall
+      type: 0
+      parameters:
+      - 0
+      - 0
+      - 0.5
+    - name: Small
+      type: 0
+      parameters:
+      - 0
+      - 0.5
+      - 1
+    - name: Medium
+      type: 0
+      parameters:
+      - 0.5
+      - 1
+      - 1.5
+    - name: Large
+      type: 0
+      parameters:
+      - 1
+      - 1.5
+      - 2
+    - name: VeryLarge
+      type: 0
+      parameters:
+      - 1.5
+      - 2
+      - 2
+  longitudinalError:
+    name: LongitudinalError
+    minValue: 0
+    maxValue: 5
+    fuzzySets:
+    - name: VerySmall
+      type: 0
+      parameters:
+      - 0
+      - 0
+      - 1
+    - name: Small
+      type: 0
+      parameters:
+      - 0
+      - 1
+      - 2
+    - name: Medium
+      type: 0
+      parameters:
+      - 1
+      - 2
+      - 3
+    - name: Large
+      type: 0
+      parameters:
+      - 2
+      - 3
+      - 4
+    - name: VeryLarge
+      type: 0
+      parameters:
+      - 3
+      - 5
+      - 5
+  currentSpeed:
+    name: CurrentSpeed
+    minValue: 0
+    maxValue: 5
+    fuzzySets:
+    - name: Stopped
+      type: 0
+      parameters:
+      - 0
+      - 0
+      - 0.5
+    - name: VerySlow
+      type: 0
+      parameters:
+      - 0
+      - 0.5
+      - 1
+    - name: Slow
+      type: 0
+      parameters:
+      - 0.5
+      - 1
+      - 2
+    - name: Medium
+      type: 0
+      parameters:
+      - 1
+      - 2
+      - 3
+    - name: Fast
+      type: 0
+      parameters:
+      - 2
+      - 3
+      - 4
+    - name: VeryFast
+      type: 0
+      parameters:
+      - 3
+      - 5
+      - 5
+  speedError:
+    name: SpeedError
+    minValue: -2
+    maxValue: 2
+    fuzzySets:
+    - name: LargeNegative
+      type: 0
+      parameters:
+      - -2
+      - -2
+      - -1
+    - name: SmallNegative
+      type: 0
+      parameters:
+      - -1.5
+      - -1
+      - -0.5
+    - name: Zero
+      type: 0
+      parameters:
+      - -0.5
+      - 0
+      - 0.5
+    - name: SmallPositive
+      type: 0
+      parameters:
+      - 0.5
+      - 1
+      - 1.5
+    - name: LargePositive
+      type: 0
+      parameters:
+      - 1
+      - 2
+      - 2

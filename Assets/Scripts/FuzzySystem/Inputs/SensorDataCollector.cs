@@ -11,11 +11,13 @@ namespace ParkingSystem.FuzzySystem.Inputs
         private List<Vector2> obstaclePositions = new List<Vector2>();
         private List<GameObject> dynamicObstacles = new List<GameObject>();
         private GameObject[] parkingSpotObjects;
+        private LayerMask obstacleMask;
 
         public SensorDataCollector(CarAI carAI, CarSpawner carSpawner = null)
         {
             this.carAI = carAI;
             this.carTransform = carAI.transform;
+            this.obstacleMask = carAI.GetObstacleMask();
             InitializeEnvironment();
         }
 
@@ -70,6 +72,7 @@ namespace ParkingSystem.FuzzySystem.Inputs
 
                 // Данные датчиков (8 лучей в 2D)
                 input.sensorDistances = CastSensorRays2D();
+                Debug.Log($"Датчики (сырые): [0]={input.sensorDistances[0]:F2}, [2]={input.sensorDistances[2]:F2}, [4]={input.sensorDistances[4]:F2}, [6]={input.sensorDistances[6]:F2}");
 
                 // Парковочные места
                 input.availableSpots = GetAvailableParkingSpots2D();
@@ -112,7 +115,8 @@ namespace ParkingSystem.FuzzySystem.Inputs
 
             for (int i = 0; i < 8; i++)
             {
-                RaycastHit2D hit = Physics2D.Raycast(carPos, directions[i], sensorRange);
+                // 3. Используйте obstacleMask в Physics2D.Raycast:
+                RaycastHit2D hit = Physics2D.Raycast(carPos, directions[i], sensorRange, obstacleMask);
 
                 if (hit.collider != null)
                 {
@@ -126,7 +130,6 @@ namespace ParkingSystem.FuzzySystem.Inputs
                     Debug.DrawRay(carPos, directions[i] * sensorRange, Color.green, 0.1f);
                 }
             }
-
             return distances;
         }
 

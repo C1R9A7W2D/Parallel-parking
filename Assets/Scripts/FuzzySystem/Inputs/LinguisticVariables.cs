@@ -31,6 +31,7 @@ namespace ParkingSystem.FuzzySystem.Inputs
         /// <summary>
         /// Инициализация переменных значениями по умолчанию
         /// </summary>
+        [ContextMenu("Initialize Defaults")]
         public void InitializeDefaults()
         {
             // Расстояние вперед (0-10 м)
@@ -41,11 +42,75 @@ namespace ParkingSystem.FuzzySystem.Inputs
                 maxValue = 10f,
                 fuzzySets = new FuzzySet[]
                 {
-                    new FuzzySet { name = "VeryClose", type = MembershipType.Triangular, parameters = new float[] { 0f, 0f, 1f } },
-                    new FuzzySet { name = "Close", type = MembershipType.Triangular, parameters = new float[] { 0.5f, 1.5f, 2.5f } },
-                    new FuzzySet { name = "Medium", type = MembershipType.Triangular, parameters = new float[] { 2f, 3f, 4f } },
-                    new FuzzySet { name = "Far", type = MembershipType.Triangular, parameters = new float[] { 3f, 5f, 7f } },
-                    new FuzzySet { name = "VeryFar", type = MembershipType.Triangular, parameters = new float[] { 6f, 10f, 10f } }
+            new FuzzySet { name = "VeryClose", type = MembershipType.Triangular, parameters = new float[] { 0f, 0f, 1f } },
+            new FuzzySet { name = "Close", type = MembershipType.Triangular, parameters = new float[] { 0.5f, 1.5f, 2.5f } },
+            new FuzzySet { name = "Medium", type = MembershipType.Triangular, parameters = new float[] { 2f, 3f, 4f } },
+            new FuzzySet { name = "Far", type = MembershipType.Triangular, parameters = new float[] { 3f, 5f, 7f } },
+            new FuzzySet { name = "VeryFar", type = MembershipType.Triangular, parameters = new float[] { 6f, 10f, 10f } }
+                }
+            };
+
+            // Расстояние назад (0-10 м)
+            rearDistance = new FuzzyVariable
+            {
+                name = "RearDistance",
+                minValue = 0f,
+                maxValue = 10f,
+                fuzzySets = new FuzzySet[]
+                {
+            new FuzzySet { name = "VeryClose", type = MembershipType.Triangular, parameters = new float[] { 0f, 0f, 1f } },
+            new FuzzySet { name = "Close", type = MembershipType.Triangular, parameters = new float[] { 0.5f, 1.5f, 2.5f } },
+            new FuzzySet { name = "Medium", type = MembershipType.Triangular, parameters = new float[] { 2f, 3f, 4f } },
+            new FuzzySet { name = "Far", type = MembershipType.Triangular, parameters = new float[] { 3f, 5f, 7f } },
+            new FuzzySet { name = "VeryFar", type = MembershipType.Triangular, parameters = new float[] { 6f, 10f, 10f } }
+                }
+            };
+
+            // Расстояние слева (0-5 м)
+            leftSideDistance = new FuzzyVariable
+            {
+                name = "LeftSideDistance",
+                minValue = 0f,
+                maxValue = 5f,
+                fuzzySets = new FuzzySet[]
+                {
+            new FuzzySet { name = "VeryClose", type = MembershipType.Triangular, parameters = new float[] { 0f, 0f, 1f } },
+            new FuzzySet { name = "Close", type = MembershipType.Triangular, parameters = new float[] { 0.5f, 1.5f, 2.5f } },
+            new FuzzySet { name = "Medium", type = MembershipType.Triangular, parameters = new float[] { 2f, 3f, 4f } },
+            new FuzzySet { name = "Far", type = MembershipType.Triangular, parameters = new float[] { 3f, 4f, 5f } },
+            new FuzzySet { name = "VeryFar", type = MembershipType.Triangular, parameters = new float[] { 4f, 5f, 5f } }
+                }
+            };
+
+            // Расстояние справа (0-5 м)
+            rightSideDistance = new FuzzyVariable
+            {
+                name = "RightSideDistance",
+                minValue = 0f,
+                maxValue = 5f,
+                fuzzySets = new FuzzySet[]
+                {
+            new FuzzySet { name = "VeryClose", type = MembershipType.Triangular, parameters = new float[] { 0f, 0f, 1f } },
+            new FuzzySet { name = "Close", type = MembershipType.Triangular, parameters = new float[] { 0.5f, 1.5f, 2.5f } },
+            new FuzzySet { name = "Medium", type = MembershipType.Triangular, parameters = new float[] { 2f, 3f, 4f } },
+            new FuzzySet { name = "Far", type = MembershipType.Triangular, parameters = new float[] { 3f, 4f, 5f } },
+            new FuzzySet { name = "VeryFar", type = MembershipType.Triangular, parameters = new float[] { 4f, 5f, 5f } }
+                }
+            };
+
+            // Ширина парковочного места (2-4 м)
+            parkingSpotWidth = new FuzzyVariable
+            {
+                name = "ParkingSpotWidth",
+                minValue = 2f,
+                maxValue = 4f,
+                fuzzySets = new FuzzySet[]
+                {
+            new FuzzySet { name = "VeryNarrow", type = MembershipType.Triangular, parameters = new float[] { 2f, 2f, 2.5f } },
+            new FuzzySet { name = "Narrow", type = MembershipType.Triangular, parameters = new float[] { 2f, 2.5f, 3f } },
+            new FuzzySet { name = "Medium", type = MembershipType.Triangular, parameters = new float[] { 2.5f, 3f, 3.5f } },
+            new FuzzySet { name = "Wide", type = MembershipType.Triangular, parameters = new float[] { 3f, 3.5f, 4f } },
+            new FuzzySet { name = "VeryWide", type = MembershipType.Triangular, parameters = new float[] { 3.5f, 4f, 4f } }
                 }
             };
 
@@ -57,11 +122,59 @@ namespace ParkingSystem.FuzzySystem.Inputs
                 maxValue = 45f,
                 fuzzySets = new FuzzySet[]
                 {
-                    new FuzzySet { name = "LargeLeft", type = MembershipType.Triangular, parameters = new float[] { -45f, -45f, -25f } },
-                    new FuzzySet { name = "SmallLeft", type = MembershipType.Triangular, parameters = new float[] { -30f, -15f, 0f } },
-                    new FuzzySet { name = "Aligned", type = MembershipType.Triangular, parameters = new float[] { -10f, 0f, 10f } },
-                    new FuzzySet { name = "SmallRight", type = MembershipType.Triangular, parameters = new float[] { 0f, 15f, 30f } },
-                    new FuzzySet { name = "LargeRight", type = MembershipType.Triangular, parameters = new float[] { 25f, 45f, 45f } }
+            new FuzzySet { name = "LargeLeft", type = MembershipType.Triangular, parameters = new float[] { -45f, -45f, -25f } },
+            new FuzzySet { name = "SmallLeft", type = MembershipType.Triangular, parameters = new float[] { -30f, -15f, 0f } },
+            new FuzzySet { name = "Aligned", type = MembershipType.Triangular, parameters = new float[] { -10f, 0f, 10f } },
+            new FuzzySet { name = "SmallRight", type = MembershipType.Triangular, parameters = new float[] { 0f, 15f, 30f } },
+            new FuzzySet { name = "LargeRight", type = MembershipType.Triangular, parameters = new float[] { 25f, 45f, 45f } }
+                }
+            };
+
+            // Угол подхода (-90 до 90 градусов)
+            approachAngle = new FuzzyVariable
+            {
+                name = "ApproachAngle",
+                minValue = -90f,
+                maxValue = 90f,
+                fuzzySets = new FuzzySet[]
+                {
+            new FuzzySet { name = "LargeLeft", type = MembershipType.Triangular, parameters = new float[] { -90f, -90f, -45f } },
+            new FuzzySet { name = "SmallLeft", type = MembershipType.Triangular, parameters = new float[] { -60f, -30f, 0f } },
+            new FuzzySet { name = "Aligned", type = MembershipType.Triangular, parameters = new float[] { -15f, 0f, 15f } },
+            new FuzzySet { name = "SmallRight", type = MembershipType.Triangular, parameters = new float[] { 0f, 30f, 60f } },
+            new FuzzySet { name = "LargeRight", type = MembershipType.Triangular, parameters = new float[] { 45f, 90f, 90f } }
+                }
+            };
+
+            // Боковая ошибка (0-2 м)
+            lateralError = new FuzzyVariable
+            {
+                name = "LateralError",
+                minValue = 0f,
+                maxValue = 2f,
+                fuzzySets = new FuzzySet[]
+                {
+            new FuzzySet { name = "VerySmall", type = MembershipType.Triangular, parameters = new float[] { 0f, 0f, 0.5f } },
+            new FuzzySet { name = "Small", type = MembershipType.Triangular, parameters = new float[] { 0f, 0.5f, 1f } },
+            new FuzzySet { name = "Medium", type = MembershipType.Triangular, parameters = new float[] { 0.5f, 1f, 1.5f } },
+            new FuzzySet { name = "Large", type = MembershipType.Triangular, parameters = new float[] { 1f, 1.5f, 2f } },
+            new FuzzySet { name = "VeryLarge", type = MembershipType.Triangular, parameters = new float[] { 1.5f, 2f, 2f } }
+                }
+            };
+
+            // Продольная ошибка (0-5 м)
+            longitudinalError = new FuzzyVariable
+            {
+                name = "LongitudinalError",
+                minValue = 0f,
+                maxValue = 5f,
+                fuzzySets = new FuzzySet[]
+                {
+            new FuzzySet { name = "VerySmall", type = MembershipType.Triangular, parameters = new float[] { 0f, 0f, 1f } },
+            new FuzzySet { name = "Small", type = MembershipType.Triangular, parameters = new float[] { 0f, 1f, 2f } },
+            new FuzzySet { name = "Medium", type = MembershipType.Triangular, parameters = new float[] { 1f, 2f, 3f } },
+            new FuzzySet { name = "Large", type = MembershipType.Triangular, parameters = new float[] { 2f, 3f, 4f } },
+            new FuzzySet { name = "VeryLarge", type = MembershipType.Triangular, parameters = new float[] { 3f, 5f, 5f } }
                 }
             };
 
@@ -73,16 +186,74 @@ namespace ParkingSystem.FuzzySystem.Inputs
                 maxValue = 5f,
                 fuzzySets = new FuzzySet[]
                 {
-                    new FuzzySet { name = "Stopped", type = MembershipType.Triangular, parameters = new float[] { 0f, 0f, 0.5f } },
-                    new FuzzySet { name = "VerySlow", type = MembershipType.Triangular, parameters = new float[] { 0f, 0.5f, 1f } },
-                    new FuzzySet { name = "Slow", type = MembershipType.Triangular, parameters = new float[] { 0.5f, 1f, 2f } },
-                    new FuzzySet { name = "Medium", type = MembershipType.Triangular, parameters = new float[] { 1f, 2f, 3f } },
-                    new FuzzySet { name = "Fast", type = MembershipType.Triangular, parameters = new float[] { 2f, 3f, 4f } },
-                    new FuzzySet { name = "VeryFast", type = MembershipType.Triangular, parameters = new float[] { 3f, 5f, 5f } }
+            new FuzzySet { name = "Stopped", type = MembershipType.Triangular, parameters = new float[] { 0f, 0f, 0.5f } },
+            new FuzzySet { name = "VerySlow", type = MembershipType.Triangular, parameters = new float[] { 0f, 0.5f, 1f } },
+            new FuzzySet { name = "Slow", type = MembershipType.Triangular, parameters = new float[] { 0.5f, 1f, 2f } },
+            new FuzzySet { name = "Medium", type = MembershipType.Triangular, parameters = new float[] { 1f, 2f, 3f } },
+            new FuzzySet { name = "Fast", type = MembershipType.Triangular, parameters = new float[] { 2f, 3f, 4f } },
+            new FuzzySet { name = "VeryFast", type = MembershipType.Triangular, parameters = new float[] { 3f, 5f, 5f } }
                 }
             };
 
-            // Остальные переменные инициализировать аналогично...
+            // Ошибка скорости (-2 до 2 м/с)
+            speedError = new FuzzyVariable
+            {
+                name = "SpeedError",
+                minValue = -2f,
+                maxValue = 2f,
+                fuzzySets = new FuzzySet[]
+                {
+            new FuzzySet { name = "LargeNegative", type = MembershipType.Triangular, parameters = new float[] { -2f, -2f, -1f } },
+            new FuzzySet { name = "SmallNegative", type = MembershipType.Triangular, parameters = new float[] { -1.5f, -1f, -0.5f } },
+            new FuzzySet { name = "Zero", type = MembershipType.Triangular, parameters = new float[] { -0.5f, 0f, 0.5f } },
+            new FuzzySet { name = "SmallPositive", type = MembershipType.Triangular, parameters = new float[] { 0.5f, 1f, 1.5f } },
+            new FuzzySet { name = "LargePositive", type = MembershipType.Triangular, parameters = new float[] { 1f, 2f, 2f } }
+                }
+            };
+        }
+
+        /// <summary>
+        /// Проверка корректности всех переменных
+        /// </summary>
+        public bool ValidateVariables()
+        {
+            bool isValid = true;
+
+            // Проверяем все переменные, не только некоторые
+            if (IsVariableInvalid(frontDistance, "FrontDistance"))
+                isValid = false;
+
+            if (IsVariableInvalid(rearDistance, "RearDistance"))
+                isValid = false;
+
+            if (IsVariableInvalid(leftSideDistance, "LeftSideDistance"))
+                isValid = false;
+
+            if (IsVariableInvalid(rightSideDistance, "RightSideDistance"))
+                isValid = false;
+
+            if (IsVariableInvalid(parkingSpotWidth, "ParkingSpotWidth"))
+                isValid = false;
+
+            if (IsVariableInvalid(alignmentAngle, "AlignmentAngle"))
+                isValid = false;
+
+            if (IsVariableInvalid(approachAngle, "ApproachAngle"))
+                isValid = false;
+
+            if (IsVariableInvalid(lateralError, "LateralError"))
+                isValid = false;
+
+            if (IsVariableInvalid(longitudinalError, "LongitudinalError"))
+                isValid = false;
+
+            if (IsVariableInvalid(currentSpeed, "CurrentSpeed"))
+                isValid = false;
+
+            if (IsVariableInvalid(speedError, "SpeedError"))
+                isValid = false;
+
+            return isValid;
         }
 
         /// <summary>
@@ -129,33 +300,6 @@ namespace ParkingSystem.FuzzySystem.Inputs
                     Debug.LogWarning($"Неизвестная лингвистическая переменная: {variableName}");
                     return null; // Возвращаем null для неизвестных имен
             }
-        }
-
-        /// <summary>
-        /// Проверка корректности всех переменных
-        /// </summary>
-        public bool ValidateVariables()
-        {
-            bool isValid = true;
-
-            // Вместо проверки на null, проверяем, инициализированы ли fuzzySets
-            if (IsVariableInvalid(frontDistance, "FrontDistance"))
-                isValid = false;
-
-            if (IsVariableInvalid(alignmentAngle, "AlignmentAngle"))
-                isValid = false;
-
-            if (IsVariableInvalid(currentSpeed, "CurrentSpeed"))
-                isValid = false;
-
-            // Дополнительные проверки (опционально)
-            if (IsVariableInvalid(rearDistance, "RearDistance"))
-                Debug.LogWarning("RearDistance не инициализирована!");
-
-            if (IsVariableInvalid(leftSideDistance, "LeftSideDistance"))
-                Debug.LogWarning("LeftSideDistance не инициализирована!");
-
-            return isValid;
         }
 
         /// <summary>

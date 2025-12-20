@@ -1,6 +1,7 @@
 using ParkingSystem.FuzzySystem.Inputs;
 using ParkingSystem.Integration;
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace ParkingSystem.FuzzySystem.Interfaces
 {
@@ -46,6 +47,13 @@ namespace ParkingSystem.FuzzySystem.Interfaces
         public float firingStrength;     // Степень активации правила (0-1)
         public string[] triggeredOutputs; // Какие выходные термы были активированы
         public string debugMessage;      // Сообщение для отладки
+        public float timestamp;          // Время выполнения
+
+        public override string ToString()
+        {
+            return $"{ruleName}: {(wasTriggered ? "Сработало" : "Не сработало")}, " +
+                   $"сила={firingStrength:F2}, выходы={string.Join(", ", triggeredOutputs)}";
+        }
     }
 
     /// <summary>
@@ -59,5 +67,14 @@ namespace ParkingSystem.FuzzySystem.Interfaces
         public string[] consequents;
         public float weight;
         public bool isEnabled;
+        public ParkingPhase applicablePhase;
+
+        public override string ToString()
+        {
+            return $"{name} ({applicablePhase}): {description}\n" +
+                   $"Условия: {string.Join(" И ", antecedents)}\n" +
+                   $"Действия: {string.Join(", ", consequents)}\n" +
+                   $"Вес: {weight:F2}, Включено: {isEnabled}";
+        }
     }
 }

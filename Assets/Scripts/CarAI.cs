@@ -128,6 +128,11 @@ namespace ParkingSystem.FuzzySystem
             }
         }
 
+        public LayerMask GetObstacleMask()
+        {
+            return obstacleMask;
+        }
+
         public void ToggleMovementDirection()
         {
             movesForward = !movesForward;
