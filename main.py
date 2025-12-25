@@ -1,8 +1,9 @@
+import time
 import pygame
 import math
 import sys
 import json
-from typing import List, Tuple, Dict, Optional, Any
+from typing import List, Tuple, Dict, Optional, Any, TypedDict
 from enum import Enum
 from dataclasses import dataclass
 import random
@@ -99,6 +100,15 @@ class Rule:
         except Exception as e:
             # print(f"Ошибка в правиле '{self.name}': {e}, условие: {condition}")
             return False
+        
+
+class DecisionInfo(TypedDict):
+    throttle: float
+    steering: float
+    reasoning: str
+    emergency: bool
+    rule_applied: str
+    rule_description: str
 
 
 class KnowledgeBase:
@@ -470,7 +480,7 @@ class ExpertSystem:
 
     def make_decision(self, phase: ParkingPhase, sensors: List[float],
                       car_pos: Tuple[float, float], car_angle: float,
-                      target_spot: Optional[ParkingSpot] = None) -> Dict:
+                      target_spot: Optional[ParkingSpot] = None) -> DecisionInfo:
         """Принятие решения на основе логического вывода"""
 
         # Подготавливаем факты
@@ -508,7 +518,7 @@ class ExpertSystem:
             'rule_applied': decision.get('rule_applied', 'unknown')
         })
 
-        return decision
+        return DecisionInfo(**decision)
 
 
 class Car:
@@ -516,24 +526,34 @@ class Car:
         self.x = x
         self.y = y
         self.angle = angle
-        self.speed = 0
+        self.speed = 0.0
         self.max_speed = 2.5
-        self.steering = 0
+        self.steering = 0.0
         self.color = color
         self.turning_radius = CAR_LENGTH * 2.5
         self.sensors = [SENSOR_RANGE] * 8
-        self.previous_speed = 0
-        self.acceleration = 0.5
+        self.previous_speed = 0.0
+        self.acceleration = 0.01
+        self.deceleration = 0.02
 
     def update(self, dt):
         # Плавное изменение скорости
         speed_diff = self.speed - self.previous_speed
-        max_accel_change = self.acceleration * dt * 60
-        if abs(speed_diff) > max_accel_change:
-            if speed_diff > 0:
-                self.speed = self.previous_speed + max_accel_change
+        
+        if speed_diff != 0:
+            is_accelerating = abs(self.speed) > abs(self.previous_speed)
+            
+            if is_accelerating:
+                max_change = self.acceleration * dt * 60
             else:
-                self.speed = self.previous_speed - max_accel_change
+                max_change = self.deceleration * dt * 60
+            
+            # Ограничиваем изменение скорости
+            if abs(speed_diff) > max_change:
+                if speed_diff > 0:
+                    self.speed = self.previous_speed + max_change
+                else:
+                    self.speed = self.previous_speed - max_change
 
         self.previous_speed = self.speed
 
@@ -650,7 +670,7 @@ class ParkingSimulation:
         self.current_phase = ParkingPhase.SEARCHING
         self.selected_spot = None
         self.parked = False
-        self.decision_info = {}
+        self.decision_info: Optional[DecisionInfo] = None
         self.phase_timer = 0
         self.current_sensors = [SENSOR_RANGE] * 8
         self.rule_applied = "Начало движения"
@@ -788,11 +808,11 @@ class ParkingSimulation:
 
             # Применение решения
             if self.decision_info.get("emergency", False):
-                self.player_car.speed = 0
-                self.player_car.steering = 0
+                self.player_car.speed = 0.0
+                self.player_car.steering = 0.0
             else:
-                self.player_car.speed = self.decision_info["throttle"]
-                self.player_car.steering = self.decision_info["steering"]
+                self.player_car.speed = float(self.decision_info["throttle"])
+                self.player_car.steering = float(self.decision_info["steering"])
 
             # Обновление автомобиля
             self.player_car.update(dt)
@@ -1060,7 +1080,7 @@ class ParkingSimulation:
             self.current_sensors[3],  # Передний
             self.current_sensors[5],  # Правый
             self.current_sensors[6],  # Задний правый
-            self.current_sensors[7]  # Задний
+            self.current_sensors[7]   # Задний
         ]
 
         for i, (name, value) in enumerate(zip(sensor_names, sensor_values)):
