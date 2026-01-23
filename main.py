@@ -1,12 +1,10 @@
-import time
 import pygame
 import math
 import sys
-import json
-from typing import List, Tuple, Dict, Optional, Any, TypedDict
+import random
+from typing import List, Tuple, Dict, Optional, Any
 from enum import Enum
 from dataclasses import dataclass
-import random
 
 # Константы
 WIDTH, HEIGHT = 1400, 700
@@ -16,6 +14,7 @@ CAR_WIDTH = 40
 SENSOR_RANGE = 400
 
 
+# Фазы парковки
 class ParkingPhase(Enum):
     SEARCHING = "searching"
     APPROACH = "approach"
@@ -28,497 +27,111 @@ class ParkingPhase(Enum):
     ABORTED = "aborted"
 
 
-class Direction(Enum):
-    FORWARD = "forward"
-    BACKWARD = "backward"
+# Нечеткая логика
+class MembershipFunction:
+    def calculate(self, x: float) -> float:
+        raise NotImplementedError
 
 
-class RulePriority(Enum):
-    HIGH = 3
-    MEDIUM = 2
-    LOW = 1
+class TriangleMF(MembershipFunction):
+    def __init__(self, a: float, b: float, c: float):
+        self.a, self.b, self.c = a, b, c
+
+    def calculate(self, x: float) -> float:
+        return max(0.0, min((x - self.a) / (self.b - self.a + 1e-9),
+                            (self.c - x) / (self.c - self.b + 1e-9)))
 
 
-@dataclass
-class ParkingSpot:
-    x: float
-    y: float
-    width: float = 100
-    length: float = 120
-    occupied: bool = False
-    suitable: bool = True
+class TrapezoidMF(MembershipFunction):
+    def __init__(self, a: float, b: float, c: float, d: float):
+        self.a, self.b, self.c, self.d = a, b, c, d
+
+    def calculate(self, x: float) -> float:
+        return max(0.0, min((x - self.a) / (self.b - self.a + 1e-9),
+                            1.0, (self.d - x) / (self.d - self.c + 1e-9)))
 
 
-@dataclass
-class ParkingConfig:
-    turn_radius_ratio: float = 2.5
-    sensor_range: float = SENSOR_RANGE
-    max_speed: float = 2.5
-    max_reverse_speed: float = 1.5
-    preferred_direction: Direction = Direction.FORWARD
-    safety_margin: float = 30.0
-    steering_sensitivity: float = 0.3
+class FuzzyVariable:
+    def __init__(self, name: str, min_val: float, max_val: float):
+        self.name = name
+        self.min_val = min_val
+        self.max_val = max_val
+        self.sets: Dict[str, MembershipFunction] = {}
+        self.value = 0.0
+
+    def add_set(self, name: str, mf: MembershipFunction):
+        self.sets[name] = mf
+
+    def fuzzify(self, value: float):
+        self.value = max(self.min_val, min(self.max_val, value))
+        return {name: mf.calculate(self.value) for name, mf in self.sets.items()}
 
 
-@dataclass
-class Rule:
-    name: str
-    priority: RulePriority
-    conditions: List[str]
-    actions: Dict[str, Any]
-    description: str
+class FuzzyRule:
+    def __init__(self, conditions: List[Tuple[FuzzyVariable, str]],
+                 output: Tuple[FuzzyVariable, str], weight: float = 1.0):
+        self.conditions = conditions
+        self.output_var, self.output_set = output
+        self.weight = weight
 
-    def evaluate(self, context: Dict[str, Any]) -> bool:
-        """Оценка условий правила"""
-        try:
-            for condition in self.conditions:
-                # Простая замена переменных
-                eval_condition = condition
-
-                # Заменяем переменные из контекста
-                for key, value in context.items():
-                    if key in eval_condition and isinstance(value, (int, float)):
-                        # Для числовых значений
-                        eval_condition = eval_condition.replace(key, str(value))
-                    elif key in eval_condition and isinstance(value, str):
-                        # Для строковых значений (фазы)
-                        if f"{key} ==" in eval_condition:
-                            eval_condition = eval_condition.replace(f"{key} ==", f"'{value}' ==")
-                        elif f"{key} !=" in eval_condition:
-                            eval_condition = eval_condition.replace(f"{key} !=", f"'{value}' !=")
-
-                # Также заменяем константы
-                if "CAR_LENGTH" in eval_condition:
-                    eval_condition = eval_condition.replace("CAR_LENGTH", str(CAR_LENGTH))
-                if "CAR_WIDTH" in eval_condition:
-                    eval_condition = eval_condition.replace("CAR_WIDTH", str(CAR_WIDTH))
-
-                # Выполняем условие
-                if not eval(eval_condition, {"math": math}, context):
-                    return False
-            return True
-        except Exception as e:
-            # print(f"Ошибка в правиле '{self.name}': {e}, условие: {condition}")
-            return False
-        
-
-class DecisionInfo(TypedDict):
-    throttle: float
-    steering: float
-    reasoning: str
-    emergency: bool
-    rule_applied: str
-    rule_description: str
+    def evaluate(self, inputs: Dict[str, Dict[str, float]]) -> float:
+        strength = 1.0
+        for var, set_name in self.conditions:
+            strength = min(strength, inputs[var.name].get(set_name, 0.0))
+        return strength * self.weight
 
 
-class KnowledgeBase:
-    """База знаний с правилами парковки"""
+class FuzzySystem:
+    def __init__(self):
+        self.inputs: Dict[str, FuzzyVariable] = {}
+        self.outputs: Dict[str, FuzzyVariable] = {}
+        self.rules: List[FuzzyRule] = []
 
-    def __init__(self, config: ParkingConfig):
-        self.config = config
-        self.rules = self._build_rules()
-        self.facts = {}
-        self.initialized = False
+    def add_input(self, var: FuzzyVariable):
+        self.inputs[var.name] = var
 
-    def _build_rules(self) -> Dict[str, Rule]:
-        """Создание базы правил для парковки"""
-        rules = {}
+    def add_output(self, var: FuzzyVariable):
+        self.outputs[var.name] = var
 
-        # === ПРАВИЛА ИНИЦИАЛИЗАЦИИ ===
+    def add_rule(self, rule: FuzzyRule):
+        self.rules.append(rule)
 
-        # Правило 1: Начало движения при старте
-        rules["initial_start"] = Rule(
-            name="Начало движения",
-            priority=RulePriority.HIGH,
-            conditions=[
-                "phase == 'searching'",
-                "car_x < 300"  # Только в начале пути
-            ],
-            actions={
-                "throttle": "config.max_speed * 0.7",
-                "steering": 0.0,
-                "reasoning": "Начало движения по дороге",
-                "emergency": False
-            },
-            description="Начальное движение при старте системы"
-        )
+    def compute(self, input_values: Dict[str, float]) -> Dict[str, float]:
+        fuzzified_inputs = {}
+        for name, var in self.inputs.items():
+            val = input_values.get(name, 0.0)
+            fuzzified_inputs[name] = var.fuzzify(val)
 
-        # === ПРАВИЛА БЕЗОПАСНОСТИ ===
+        output_aggregations = {out_name: {} for out_name in self.outputs}
 
-        # Правило 2: Экстренная остановка
-        rules["emergency_stop"] = Rule(
-            name="Экстренная остановка",
-            priority=RulePriority.HIGH,
-            conditions=[
-                "front_sensor < 30",
-                "throttle > 0"
-            ],
-            actions={
-                "throttle": 0.0,
-                "steering": 0.0,
-                "reasoning": "Экстренная остановка: препятствие впереди",
-                "emergency": True
-            },
-            description="Остановка при опасном сближении"
-        )
+        for rule in self.rules:
+            strength = rule.evaluate(fuzzified_inputs)
+            if strength > 0:
+                out_name = rule.output_var.name
+                set_name = rule.output_set
+                current = output_aggregations[out_name].get(set_name, 0.0)
+                output_aggregations[out_name][set_name] = max(current, strength)
 
-        # Правило 3: Замедление у препятствия
-        rules["slow_down"] = Rule(
-            name="Замедление",
-            priority=RulePriority.HIGH,
-            conditions=[
-                "front_sensor < 100",
-                "throttle > 0"
-            ],
-            actions={
-                "throttle": "throttle * 0.5",
-                "steering": 0.0,
-                "reasoning": "Замедление: препятствие впереди",
-                "emergency": False
-            },
-            description="Замедление при приближении к препятствию"
-        )
+        results = {}
+        for name, var in self.outputs.items():
+            numerator = 0.0
+            denominator = 0.0
+            steps = 30
+            step_size = (var.max_val - var.min_val) / steps
 
-        # === ПРАВИЛА ПОИСКА МЕСТА ===
+            for i in range(steps + 1):
+                x = var.min_val + i * step_size
+                mu_max = 0.0
+                for set_name, strength in output_aggregations[name].items():
+                    mf_val = var.sets[set_name].calculate(x)
+                    mu_max = max(mu_max, min(strength, mf_val))
 
-        # Правило 4: Прямое движение при поиске
-        rules["straight_search"] = Rule(
-            name="Прямой поиск",
-            priority=RulePriority.MEDIUM,
-            conditions=[
-                "phase == 'searching'",
-                "selected_spot is None"
-            ],
-            actions={
-                "throttle": "config.max_speed * 0.7",
-                "steering": 0.0,
-                "reasoning": "Поиск свободного парковочного места",
-                "emergency": False
-            },
-            description="Прямое движение для поиска места"
-        )
+                numerator += x * mu_max
+                denominator += mu_max
 
-        # Правило 5: Коррекция центра
-        rules["center_correction"] = Rule(
-            name="Коррекция центра",
-            priority=RulePriority.MEDIUM,
-            conditions=[
-                "phase == 'searching'",
-                "abs(left_sensor - right_sensor) > 50"
-            ],
-            actions={
-                "throttle": "config.max_speed * 0.7",
-                "steering": "(right_sensor - left_sensor) * 0.01",
-                "reasoning": "Коррекция для движения по центру",
-                "emergency": False
-            },
-            description="Коррекция положения на дороге"
-        )
+            results[name] = numerator / denominator if denominator > 0 else 0.0
 
-        # Правило 6: Место найдено
-        rules["spot_found"] = Rule(
-            name="Место найдено",
-            priority=RulePriority.MEDIUM,
-            conditions=[
-                "phase == 'searching'",
-                "selected_spot is not None",
-                "car_x < selected_spot.x - 100"
-            ],
-            actions={
-                "throttle": "config.max_speed * 0.6",
-                "steering": 0.0,
-                "reasoning": "Найдено место, продолжаем движение",
-                "emergency": False
-            },
-            description="Движение к найденному месту"
-        )
-
-        # === ПРАВИЛА ПОДЪЕЗДА ===
-
-        # Правило 7: Подъезд к месту
-        rules["approach_spot"] = Rule(
-            name="Подъезд к месту",
-            priority=RulePriority.MEDIUM,
-            conditions=[
-                "phase == 'approach'",
-                "selected_spot is not None",
-                "car_x < selected_spot.x + CAR_LENGTH * 1.5"
-            ],
-            actions={
-                "throttle": "config.max_speed * 0.5",
-                "steering": "-(car_y - (selected_spot.y - CAR_WIDTH * 1.5)) * 0.008",
-                "reasoning": "Подъезд к позиции для парковки",
-                "emergency": False
-            },
-            description="Подъезд к позиции перед парковкой"
-        )
-
-        # Правило 8: Остановка для маневра
-        rules["stop_for_maneuver"] = Rule(
-            name="Остановка для маневра",
-            priority=RulePriority.MEDIUM,
-            conditions=[
-                "phase == 'approach'",
-                "selected_spot is not None",
-                "car_x >= selected_spot.x + CAR_LENGTH * 1.5 - 40",
-                "car_x <= selected_spot.x + CAR_LENGTH * 1.5 + 40"
-            ],
-            actions={
-                "throttle": 0.0,
-                "steering": 0.0,
-                "reasoning": "Позиция достигнута, подготовка к парковке",
-                "emergency": False
-            },
-            description="Остановка на позиции для парковки"
-        )
-
-        # === ПРАВИЛА ПОЗИЦИОНИРОВАНИЯ ===
-
-        # Правило 9: Выравнивание
-        rules["align_parallel"] = Rule(
-            name="Выравнивание",
-            priority=RulePriority.MEDIUM,
-            conditions=[
-                "phase == 'positioning'",
-                "selected_spot is not None",
-                "abs(car_angle) > 2 or abs(car_y - (selected_spot.y - CAR_WIDTH * 1.5)) > 15"
-            ],
-            actions={
-                "throttle": "config.max_speed * 0.3",
-                "steering": "-car_angle * 0.15 - (car_y - (selected_spot.y - CAR_WIDTH * 1.5)) * 0.01",
-                "reasoning": "Выравнивание параллельно парковке",
-                "emergency": False
-            },
-            description="Выравнивание автомобиля"
-        )
-
-        # Правило 10: Готовность к реверсу
-        rules["ready_for_reverse"] = Rule(
-            name="Готовность к реверсу",
-            priority=RulePriority.MEDIUM,
-            conditions=[
-                "phase == 'positioning'",
-                "selected_spot is not None",
-                "abs(car_angle) < 3",
-                "abs(car_y - (selected_spot.y - CAR_WIDTH * 1.5)) < 15",
-                "front_right_sensor < 120"
-            ],
-            actions={
-                "throttle": 0.0,
-                "steering": 0.0,
-                "reasoning": "Готовность к заднему маневру",
-                "emergency": False
-            },
-            description="Автомобиль готов к заднему маневру"
-        )
-
-        # === ПРАВИЛА ЗАДНЕГО МАНЕВРА ===
-
-        # Правило 11: Начало заднего маневра
-        rules["start_reverse"] = Rule(
-            name="Начало заднего маневра",
-            priority=RulePriority.HIGH,
-            conditions=[
-                "phase == 'reverse_right'",
-                "car_angle > -35"
-            ],
-            actions={
-                "throttle": "-config.max_reverse_speed * 0.3",
-                "steering": "20",
-                "reasoning": "Задний маневр с поворотом",
-                "emergency": False
-            },
-            description="Начало заднего маневра"
-        )
-
-        # Правило 12: Переход к выравниванию
-        rules["transition_to_align"] = Rule(
-            name="Переход к выравниванию",
-            priority=RulePriority.HIGH,
-            conditions=[
-                "phase == 'reverse_right'",
-                "car_angle <= -30"
-            ],
-            actions={
-                "throttle": "-config.max_reverse_speed * 0.2",
-                "steering": "0",
-                "reasoning": "Переход к выравниванию",
-                "emergency": False
-            },
-            description="Переход к фазе выравнивания"
-        )
-
-        # Правило 13: Выравнивание задним ходом
-        rules["reverse_align"] = Rule(
-            name="Выравнивание задним ходом",
-            priority=RulePriority.MEDIUM,
-            conditions=[
-                "phase == 'reverse_left'",
-                "abs(car_angle) > 3"
-            ],
-            actions={
-                "throttle": "-config.max_reverse_speed * 0.25",
-                "steering": "-12 - car_angle * 0.1",
-                "reasoning": "Выравнивание задним ходом",
-                "emergency": False
-            },
-            description="Выравнивание автомобиля"
-        )
-
-        # === ПРАВИЛА ПО УМОЛЧАНИЮ ===
-
-        # Правило 14: Остановка по умолчанию
-        rules["default_stop"] = Rule(
-            name="Остановка по умолчанию",
-            priority=RulePriority.LOW,
-            conditions=["phase != 'parked'"],  # Не срабатывает когда уже припарковались
-            actions={
-                "throttle": 0.0,
-                "steering": 0.0,
-                "reasoning": "Ожидание команд",
-                "emergency": False
-            },
-            description="Правило по умолчанию"
-        )
-
-        # Правило 15: Парковка завершена
-        rules["parking_complete"] = Rule(
-            name="Парковка завершена",
-            priority=RulePriority.MEDIUM,
-            conditions=["phase == 'parked'"],
-            actions={
-                "throttle": 0.0,
-                "steering": 0.0,
-                "reasoning": "Парковка успешно завершена!",
-                "emergency": False
-            },
-            description="Завершение парковки"
-        )
-
-        return rules
-
-    def update_facts(self, **facts):
-        """Обновление фактов в базе знаний"""
-        self.facts.update(facts)
-
-        # Добавляем вычисляемые факты
-        if 'car_x' in facts and 'selected_spot' in facts and facts['selected_spot']:
-            self.facts['distance_to_spot'] = math.hypot(
-                facts['car_x'] - facts['selected_spot'].x,
-                facts['car_y'] - facts['selected_spot'].y
-            )
-
-    def infer(self) -> Dict[str, Any]:
-        """Логический вывод на основе правил"""
-        # Добавляем конфиг и константы в факты
-        self.facts['config'] = self.config
-        self.facts['CAR_LENGTH'] = CAR_LENGTH
-        self.facts['CAR_WIDTH'] = CAR_WIDTH
-
-        # Проверяем наличие необходимых фактов
-        if 'throttle' not in self.facts:
-            self.facts['throttle'] = 0.0
-        if 'steering' not in self.facts:
-            self.facts['steering'] = 0.0
-        if 'emergency' not in self.facts:
-            self.facts['emergency'] = False
-
-        # Сортируем правила по приоритету
-        sorted_rules = sorted(self.rules.values(),
-                              key=lambda r: r.priority.value,
-                              reverse=True)
-
-        # Применяем правила
-        for rule in sorted_rules:
-            if rule.evaluate(self.facts):
-                # print(f"✓ Правило применено: {rule.name}")
-
-                actions = rule.actions.copy()
-
-                # Обрабатываем выражения в действиях
-                for key, value in actions.items():
-                    if isinstance(value, str) and any(char in value for char in ['+', '-', '*', '/', '(', ')']):
-                        try:
-                            # Создаем контекст для eval
-                            eval_context = {
-                                'config': self.config,
-                                'CAR_LENGTH': CAR_LENGTH,
-                                'CAR_WIDTH': CAR_WIDTH,
-                                'math': math
-                            }
-                            eval_context.update(self.facts)
-
-                            # Вычисляем выражение
-                            actions[key] = eval(value, {"__builtins__": {}}, eval_context)
-                        except:
-                            # Если не удалось вычислить, оставляем как есть
-                            pass
-
-                actions["rule_applied"] = rule.name
-                actions["rule_description"] = rule.description
-
-                return actions
-
-        # Если ни одно правило не применилось
-        return {
-            "throttle": 0.0,
-            "steering": 0.0,
-            "reasoning": "Ожидание...",
-            "emergency": False,
-            "rule_applied": "none",
-            "rule_description": "Правило не найдено"
-        }
-
-
-class ExpertSystem:
-    """Экспертная система для принятия решений при парковке"""
-
-    def __init__(self, config: ParkingConfig):
-        self.config = config
-        self.knowledge_base = KnowledgeBase(config)
-        self.decision_history = []
-
-    def make_decision(self, phase: ParkingPhase, sensors: List[float],
-                      car_pos: Tuple[float, float], car_angle: float,
-                      target_spot: Optional[ParkingSpot] = None) -> DecisionInfo:
-        """Принятие решения на основе логического вывода"""
-
-        # Подготавливаем факты
-        facts = {
-            'phase': phase.value,
-            'car_x': car_pos[0],
-            'car_y': car_pos[1],
-            'car_angle': car_angle,
-            'selected_spot': target_spot,
-
-            # Датчики
-            'front_left_sensor': sensors[2],
-            'front_sensor': sensors[3],
-            'front_right_sensor': sensors[4],
-            'left_sensor': sensors[1],
-            'right_sensor': sensors[5],
-            'rear_left_sensor': sensors[0],
-            'rear_right_sensor': sensors[6],
-            'rear_sensor': sensors[7],
-        }
-
-        # Обновляем факты
-        self.knowledge_base.update_facts(**facts)
-
-        # Получаем решение
-        decision = self.knowledge_base.infer()
-
-        # Логируем решение
-        self.decision_history.append({
-            'phase': phase.value,
-            'decision': decision.copy(),
-            'sensors': sensors.copy(),
-            'position': car_pos,
-            'angle': car_angle,
-            'rule_applied': decision.get('rule_applied', 'unknown')
-        })
-
-        return DecisionInfo(**decision)
+        return results
 
 
 class Car:
@@ -527,28 +140,32 @@ class Car:
         self.y = y
         self.angle = angle
         self.speed = 0.0
-        self.max_speed = 2.5
+        self.max_speed = 2
         self.steering = 0.0
         self.color = color
         self.turning_radius = CAR_LENGTH * 2.5
         self.sensors = [SENSOR_RANGE] * 8
         self.previous_speed = 0.0
-        self.acceleration = 0.01
+        self.acceleration = 0.02
         self.deceleration = 0.02
+        self.length = CAR_LENGTH
+        self.width = CAR_WIDTH
+
+        # Задние датчики (добавлены для более точной проверки задней части)
+        self.rear_sensors = [SENSOR_RANGE] * 3
 
     def update(self, dt):
         # Плавное изменение скорости
         speed_diff = self.speed - self.previous_speed
-        
+
         if speed_diff != 0:
             is_accelerating = abs(self.speed) > abs(self.previous_speed)
-            
+
             if is_accelerating:
                 max_change = self.acceleration * dt * 60
             else:
                 max_change = self.deceleration * dt * 60
-            
-            # Ограничиваем изменение скорости
+
             if abs(speed_diff) > max_change:
                 if speed_diff > 0:
                     self.speed = self.previous_speed + max_change
@@ -575,190 +192,1258 @@ class Car:
 
     def get_corners(self):
         c, s = math.cos(math.radians(self.angle)), math.sin(math.radians(self.angle))
-        points = [
-            (-CAR_LENGTH / 2, -CAR_WIDTH / 2),
-            (CAR_LENGTH / 2, -CAR_WIDTH / 2),
-            (CAR_LENGTH / 2, CAR_WIDTH / 2),
-            (-CAR_LENGTH / 2, CAR_WIDTH / 2)
+        dx, dy = self.length / 2, self.width / 2
+        return [
+            (self.x + dx * c - dy * s, self.y + dx * s + dy * c),
+            (self.x - dx * c - dy * s, self.y - dx * s + dy * c),
+            (self.x - dx * c + dy * s, self.y - dx * s - dy * c),
+            (self.x + dx * c + dy * s, self.y + dx * s - dy * c)
         ]
-        return [(self.x + x * c - y * s, self.y + x * s + y * c) for x, y in points]
 
-    def draw(self, screen):
-        pygame.draw.polygon(screen, self.color, self.get_corners())
+    def get_bounding_box(self):
+        """Получить ограничивающий прямоугольник машины"""
+        corners = self.get_corners()
+        x_vals = [c[0] for c in corners]
+        y_vals = [c[1] for c in corners]
+        return (min(x_vals), min(y_vals), max(x_vals) - min(x_vals), max(y_vals) - min(y_vals))
 
-        # Рисование направления
-        front = (
-            self.x + CAR_LENGTH * 0.4 * math.cos(math.radians(self.angle)),
-            self.y + CAR_LENGTH * 0.4 * math.sin(math.radians(self.angle))
-        )
-        pygame.draw.line(screen, (255, 255, 255), (self.x, self.y), front, 3)
+    def check_collision(self, other_car, margin=0):
+        """Точная проверка столкновения между двумя машинами"""
+        # Быстрая проверка ограничивающих прямоугольников
+        rect1 = self.get_bounding_box()
+        rect2 = other_car.get_bounding_box()
 
-        # Рисование сенсоров
-        sensor_angles = [-135, -90, -45, -20, 20, 45, 90, 135]
-        for i, da in enumerate(sensor_angles):
-            ang = math.radians(self.angle + da)
-            end = (
-                self.x + self.sensors[i] * math.cos(ang),
-                self.y + self.sensors[i] * math.sin(ang)
-            )
-            color = (255, 100, 100) if self.sensors[i] < 80 else (100, 255, 100) if self.sensors[i] < 150 else (100,
-                                                                                                                150,
-                                                                                                                255)
-            pygame.draw.line(screen, color, (self.x, self.y), end, 2)
+        # Если ограничивающие прямоугольники не пересекаются, то и полигоны не пересекаются
+        if (rect1[0] > rect2[0] + rect2[2] or
+                rect2[0] > rect1[0] + rect1[2] or
+                rect1[1] > rect2[1] + rect2[3] or
+                rect2[1] > rect1[1] + rect1[3]):
+            return False
+
+        # Если ограничивающие прямоугольники пересекаются, делаем точную проверку полигонов
+        return self._polygons_intersect(self.get_corners(), other_car.get_corners(), margin)
+
+    def _polygons_intersect(self, poly1, poly2, margin=0):
+        """
+        Точная проверка пересечения двух выпуклых полигонов методом SAT
+        margin - минимальное расстояние между полигонами
+        """
+
+        def get_edges(poly):
+            """Получить все рёбра полигона"""
+            edges = []
+            for i in range(len(poly)):
+                p1 = poly[i]
+                p2 = poly[(i + 1) % len(poly)]
+                edges.append((p2[0] - p1[0], p2[1] - p1[1]))
+            return edges
+
+        def get_normals(edges):
+            """Получить нормали ко всем рёбрам"""
+            normals = []
+            for edge in edges:
+                # Нормаль перпендикулярна ребру
+                normal = (-edge[1], edge[0])
+                # Нормализуем
+                length = math.sqrt(normal[0] ** 2 + normal[1] ** 2)
+                if length > 0:
+                    normals.append((normal[0] / length, normal[1] / length))
+            return normals
+
+        def project(poly, axis):
+            """Спроецировать полигон на ось"""
+            min_proj = float('inf')
+            max_proj = -float('inf')
+            for point in poly:
+                proj = point[0] * axis[0] + point[1] * axis[1]
+                if proj < min_proj:
+                    min_proj = proj
+                if proj > max_proj:
+                    max_proj = proj
+            return min_proj, max_proj
+
+        # Получаем все нормали для обоих полигонов
+        edges1 = get_edges(poly1)
+        edges2 = get_edges(poly2)
+        normals = get_normals(edges1) + get_normals(edges2)
+
+        # Проверяем каждую ось
+        for axis in normals:
+            min1, max1 = project(poly1, axis)
+            min2, max2 = project(poly2, axis)
+
+            # Если проекции не пересекаются (с учётом запаса), полигоны не пересекаются
+            if max1 + margin < min2 or max2 + margin < min1:
+                return False
+
+        return True
+
+    def check_collision_with_any(self, obstacles, margin=0):
+        """Проверить столкновение с любым из препятствий"""
+        for obstacle in obstacles:
+            if obstacle is self:
+                continue
+            if self.check_collision(obstacle, margin):
+                return True, obstacle
+        return False, None
+
+    def check_rear_collision(self, obstacles, safety_margin=35):
+        """
+        Проверка столкновения задней частью
+        Используется только для информации в контроллере
+        """
+        has_collision = False
+        min_distance = float('inf')
+
+        # Получаем полигон задней части машины
+        corners = self.get_corners()
+        # Задняя часть машины - это два задних угла (индексы 1 и 2)
+        rear_corners = [corners[1], corners[2]]
+
+        # Создаем небольшой полигон позади машины для проверки
+        rear_polygon = []
+        c, s = math.cos(math.radians(self.angle)), math.sin(math.radians(self.angle))
+        half_width = self.width / 2
+        half_length = self.length / 2
+
+        # Создаем полигон позади машины
+        for i in range(-5, 6):
+            offset = i * half_width / 5
+            point_x = self.x - half_length * c - safety_margin * c + offset * s
+            point_y = self.y - half_length * s - safety_margin * s - offset * c
+            rear_polygon.append((point_x, point_y))
+
+        for obs in obstacles:
+            if obs is self:
+                continue
+
+            if self._polygons_intersect(rear_polygon, obs.get_corners(), 0):
+                # Вычисляем расстояние между центрами
+                distance = math.hypot(self.x - obs.x, self.y - obs.y)
+                if distance < min_distance:
+                    min_distance = distance
+                    has_collision = True
+
+        return has_collision, min_distance
 
     def update_sensors(self, obstacles):
-        """Обновление показаний сенсоров"""
+        # Основные датчики (8 шт)
         self.sensors = [SENSOR_RANGE] * 8
-        sensor_angles = [-135, -90, -45, -20, 20, 45, 90, 135]
+        angles = [-135, -90, -45, -20, 20, 45, 90, 135]
 
-        for i, da in enumerate(sensor_angles):
-            ang = math.radians(self.angle + da)
-            dx, dy = math.cos(ang), math.sin(ang)
+        # Задние датчики (3 шт) - отдельный массив
+        self.rear_sensors = [SENSOR_RANGE] * 3
+        rear_angles = [-150, -180, -210]  # Левый задний, центральный задный, правый задный
+
+        # Обновляем основные датчики
+        for i, da in enumerate(angles):
+            ray_angle = math.radians(self.angle + da)
+            dx, dy = math.cos(ray_angle), math.sin(ray_angle)
+            min_dist = SENSOR_RANGE
 
             for obs in obstacles:
-                for corner in obs.get_corners():
-                    px, py = corner[0] - self.x, corner[1] - self.y
-                    proj = px * dx + py * dy
+                corners = obs.get_corners()
+                for j in range(4):
+                    p1 = corners[j]
+                    p2 = corners[(j + 1) % 4]
 
-                    if proj > 0:
-                        dist = math.hypot(px, py)
-                        if dist < self.sensors[i]:
-                            self.sensors[i] = dist
+                    x1, y1 = self.x, self.y
+                    x2, y2 = self.x + dx * SENSOR_RANGE, self.y + dy * SENSOR_RANGE
+                    x3, y3 = p1
+                    x4, y4 = p2
+
+                    denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1)
+                    if denom == 0:
+                        continue
+
+                    ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom
+                    ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom
+
+                    if 0 <= ua <= 1 and 0 <= ub <= 1:
+                        dist = ua * SENSOR_RANGE
+                        if dist < min_dist:
+                            min_dist = dist
+
+            self.sensors[i] = min_dist
+
+        # Обновляем задние датчики
+        for i, da in enumerate(rear_angles):
+            ray_angle = math.radians(self.angle + da)
+            dx, dy = math.cos(ray_angle), math.sin(ray_angle)
+            min_dist = SENSOR_RANGE
+
+            for obs in obstacles:
+                corners = obs.get_corners()
+                for j in range(4):
+                    p1 = corners[j]
+                    p2 = corners[(j + 1) % 4]
+
+                    x1, y1 = self.x, self.y
+                    x2, y2 = self.x + dx * SENSOR_RANGE, self.y + dy * SENSOR_RANGE
+                    x3, y3 = p1
+                    x4, y4 = p2
+
+                    denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1)
+                    if denom == 0:
+                        continue
+
+                    ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom
+                    ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom
+
+                    if 0 <= ua <= 1 and 0 <= ub <= 1:
+                        dist = ua * SENSOR_RANGE
+                        if dist < min_dist:
+                            min_dist = dist
+
+            self.rear_sensors[i] = min_dist
 
         return self.sensors
 
+    def get_min_rear_distance(self):
+        """Получить минимальное расстояние до препятствия сзади"""
+        # Используем задние датчики (левые, центральный и правый)
+        return min(self.rear_sensors)
 
-class ParkingSimulation:
+    def get_very_close_rear(self):
+        """Проверка на очень близкие объекты сзади (экстренная остановка)"""
+        # Проверяем, есть ли объекты ближе чем 25 пикселей
+        return any(dist < 25 for dist in self.rear_sensors)
+
+    def get_side_sensor_distance(self, side="right"):
+        """Получить расстояние от бокового датчика"""
+        if side == "right":
+            return self.sensors[5]  # Правый датчик (45°)
+        else:  # left
+            return self.sensors[2]  # Левый датчик (-45°)
+
+    def get_line_alignment(self, line_y):
+        """
+        Проверка выравнивания с горизонтальной линией
+        Возвращает минимальное расстояние от углов машины до линии и угол отклонения
+        """
+        corners = self.get_corners()
+
+        # Находим углы, которые ближе всего к линии (верхние или нижние)
+        # Для горизонтальной линии y = line_y
+        distances = []
+
+        for corner in corners:
+            distances.append(abs(corner[1] - line_y))
+
+        # Минимальное расстояние от любого угла до линии
+        min_distance = min(distances)
+
+        # Угол машины относительно горизонтали (0° - параллельно линии)
+        angle_deviation = abs(self.angle) % 180
+        if angle_deviation > 90:
+            angle_deviation = 180 - angle_deviation
+
+        return min_distance, angle_deviation
+
+    def draw(self, screen, draw_sensors=True, show_labels=False):
+        # Рисуем основную машину
+        pygame.draw.polygon(screen, self.color, self.get_corners())
+
+        # Направление автомобиля
+        front = (
+            self.x + 40 * math.cos(math.radians(self.angle)),
+            self.y + 40 * math.sin(math.radians(self.angle))
+        )
+        pygame.draw.line(screen, (255, 255, 255), (self.x, self.y), front, 3)
+
+        # Основные датчики (все синие)
+        if draw_sensors and self.speed != 0:
+            sensor_angles = [-135, -90, -45, -20, 20, 45, 90, 135]
+            for i, da in enumerate(sensor_angles):
+                ang = math.radians(self.angle + da)
+                end = (
+                    self.x + self.sensors[i] * math.cos(ang),
+                    self.y + self.sensors[i] * math.sin(ang)
+                )
+                # Все датчики синие
+                color = (100, 150, 255)
+                pygame.draw.line(screen, color, (self.x, self.y), end, 2)
+
+            # Задние датчики (тоже синие) - рисуются всегда если включены сенсоры
+            rear_sensor_angles = [-150, -180, -210]
+            for i, da in enumerate(rear_sensor_angles):
+                ang = math.radians(self.angle + da)
+                end = (
+                    self.x + self.rear_sensors[i] * math.cos(ang),
+                    self.y + self.rear_sensors[i] * math.sin(ang)
+                )
+                color = (100, 150, 255)
+                pygame.draw.line(screen, color, (self.x, self.y), end, 3)
+
+        # Отладочная визуализация (упрощенная версия)
+        if show_labels:
+            # Подписываем машину
+            font = pygame.font.SysFont("Arial", 12)
+            text = font.render(f"({int(self.x)}, {int(self.y)})", True, (255, 255, 255))
+            screen.blit(text, (self.x - 30, self.y - 30))
+
+
+@dataclass
+class ParkingSpot:
+    x: float
+    y: float
+    width: float = 110
+    length: float = 140
+    occupied: bool = False
+    gap_size: float = 0.0  # Размер промежутка для парковки
+
+
+class HybridParkingController:
+    def __init__(self, empty_road=False):
+        self.phase = ParkingPhase.SEARCHING
+        self.target_spot = None
+        self.phase_timer = 0
+        self.fuzzy_system = self._build_fuzzy_system()
+        self.parking_complete = False
+        self.stable_timer = 0
+        self.debug_info = {}
+        self.recovering_from_emergency = False
+        self.recovery_timer = 0
+
+        # Храним информацию о том, пустая ли дорога
+        self.empty_road = empty_road
+
+        # Устанавливаем целевую линию в зависимости от того, пустая ли дорога
+        # Для пустой дороги - линия дальше от бордюра (выше), для непустой - стандартная
+        if self.empty_road:
+            self.target_line_y = HEIGHT - 180  # Поднята на 30 пикселей выше для пустой дороги
+        else:
+            self.target_line_y = HEIGHT - 150  # Стандартная линия для дороги с машинами
+
+        # Параметры контроля заднего хода - УВЕЛИЧЕНЫ для безопасности
+        self.max_reverse_speed = 0.8  # Уменьшена максимальная скорость заднего хода
+        self.safety_margin = 40  # Увеличен запас безопасности
+        self.reverse_slow_distance = 90  # Увеличено расстояние для начала замедления
+        self.reverse_stop_distance = 20  # Увеличено расстояние для полной остановки
+        self.emergency_stop_distance = 15  # Увеличено расстояние для экстренной остановки
+        self.min_reverse_speed = 0.2  # Уменьшена минимальная скорость
+        self.reverse_steering_sensitivity = 1.5  # Немного уменьшена чувствительность
+        self.reverse_left_steering_multiplier = 2.4
+
+        # Параметры для перехода из REVERSE_RIGHT в REVERSE_LEFT
+        # Для пустой дороги делаем переход быстрее (меньший угол и ближе к линии)
+        if self.empty_road:
+            self.reverse_right_to_left_angle = -41  # Быстрее: -35 вместо -47
+            self.start_reverse_left_distance = -40  # Ближе к линии
+        else:
+            self.reverse_right_to_left_angle = -47  # Стандартный угол
+            self.start_reverse_left_distance = -50  # Стандартное расстояние
+
+        # Флаги для контроля столкновений
+        self.collision_detected = False
+        self.collision_cooldown = 0
+        self.collision_count = 0
+
+        # История углов для плавного управления
+        self.angle_history = []
+
+        # Флаг экстренной остановки
+        self.emergency_stop = False
+        self.emergency_stop_timer = 0
+
+        # Боковые датчики для контроля безопасности
+        self.side_safety_distance = 70  # Увеличено
+
+        # Флаги для контроля выравнивания
+        self.aligned_with_main_line = False
+        self.alignment_tolerance = 15
+
+        # Параметры для раннего начала REVERSE_LEFT
+        self.reverse_left_steering_angle = -40
+        self.reverse_left_speed = 0.5  # Уменьшена скорость
+
+        # Флаги для избежания циклического поведения
+        self.recently_backed_off = False
+        self.backoff_timer = 0
+        self.backoff_threshold = 1.5
+        self.consecutive_backoffs = 0
+        self.min_safe_distance = 20  # Минимальное безопасное расстояние
+
+        # Дополнительные параметры для контроля задней части
+        self.rear_collision_avoidance_enabled = True
+        self.last_rear_distance = float('inf')
+        self.rear_distance_decreasing = False
+
+        # Новые параметры для циклического выравнивания в FINAL_ADJUST
+        self.alignment_cycles = 0  # Счетчик выполненных циклов выравнивания
+        self.max_alignment_cycles = 5  # Максимальное количество циклов
+        self.alignment_state = "forward"  # Состояние цикла: "forward", "pause", "backward"
+        self.alignment_state_timer = 0  # Таймер для каждого состояния
+        self.alignment_forward_duration = 0.6  # Уменьшена длительность движения вперед
+        self.alignment_backward_duration = 0.6  # Уменьшена длительность движения назад
+        self.alignment_pause_duration = 0.3  # Длительность паузы между движениями
+        self.initial_angle_when_aligned = 0  # Угол при входе в FINAL_ADJUST
+        self.alignment_steering_angle = 10  # Уменьшен угол поворота при выравнивании
+        self.alignment_speed = 0.15  # Медленная скорость для безопасности
+        self.alignment_safety_distance = 40  # Минимальное безопасное расстояние
+
+        # Новые флаги для управления циклами
+        self.alignment_interrupted = False  # Флаг прерывания цикла
+        self.last_alignment_state = None  # Последнее состояние цикла
+        self.alignment_attempts = 0  # Попытки выравнивания после прерывания
+
+    def _build_fuzzy_system(self):
+        fs = FuzzySystem()
+
+        # Входные переменные
+        v_dist_right = FuzzyVariable("dist_right", 0, 200)
+        v_dist_right.add_set("close", TrapezoidMF(0, 0, 50, 70))
+        v_dist_right.add_set("optimal", TriangleMF(60, 90, 120))
+        v_dist_right.add_set("far", TrapezoidMF(100, 150, 200, 200))
+        fs.add_input(v_dist_right)
+
+        v_dist_front = FuzzyVariable("dist_front", 0, 300)
+        v_dist_front.add_set("danger", TrapezoidMF(0, 0, 60, 100))
+        v_dist_front.add_set("safe", TrapezoidMF(80, 150, 300, 300))
+        fs.add_input(v_dist_front)
+
+        v_angle_err = FuzzyVariable("angle_error", -90, 90)
+        v_angle_err.add_set("negative", TrapezoidMF(-90, -90, -10, -2))
+        v_angle_err.add_set("zero", TriangleMF(-5, 0, 5))
+        v_angle_err.add_set("positive", TrapezoidMF(2, 10, 90, 90))
+        fs.add_input(v_angle_err)
+
+        v_spot_dist = FuzzyVariable("spot_distance", 0, 500)
+        v_spot_dist.add_set("far", TrapezoidMF(0, 100, 200, 300))
+        v_spot_dist.add_set("near", TriangleMF(150, 250, 350))
+        v_spot_dist.add_set("very_near", TrapezoidMF(300, 400, 500, 500))
+        fs.add_input(v_spot_dist)
+
+        # Выходные переменные
+        v_steer = FuzzyVariable("steering", -40, 40)
+        v_steer.add_set("left", TriangleMF(-40, -25, -5))
+        v_steer.add_set("straight", TriangleMF(-5, 0, 5))
+        v_steer.add_set("right", TriangleMF(5, 25, 40))
+        fs.add_output(v_steer)
+
+        v_throttle = FuzzyVariable("throttle", -2, 3)
+        v_throttle.add_set("reverse_fast", TriangleMF(-2, -1.5, -1))
+        v_throttle.add_set("reverse_slow", TriangleMF(-1.5, -1, -0.5))
+        v_throttle.add_set("stop", TriangleMF(-0.5, 0, 0.5))
+        v_throttle.add_set("slow", TriangleMF(0.5, 1.0, 1.5))
+        v_throttle.add_set("fast", TriangleMF(1.5, 2.0, 2.5))
+        fs.add_output(v_throttle)
+
+        # Правила для разных фаз
+        fs.add_rule(FuzzyRule([(v_dist_right, "close")], (v_steer, "left")))
+        fs.add_rule(FuzzyRule([(v_dist_right, "optimal")], (v_steer, "straight")))
+        fs.add_rule(FuzzyRule([(v_dist_right, "far")], (v_steer, "right")))
+        fs.add_rule(FuzzyRule([(v_dist_front, "danger")], (v_throttle, "stop"), weight=3.0))
+        fs.add_rule(FuzzyRule([(v_angle_err, "negative")], (v_steer, "right")))
+        fs.add_rule(FuzzyRule([(v_angle_err, "positive")], (v_steer, "left")))
+
+        return fs
+
+    def update(self, car, spots, obstacles, dt):
+        # Останавливаем время в фазе PARKED
+        if self.phase != ParkingPhase.PARKED:
+            self.phase_timer += dt
+
+        # Обновляем кулдаун на столкновения
+        if self.collision_cooldown > 0:
+            self.collision_cooldown -= dt
+
+        # Обновляем таймер отъезда
+        if self.backoff_timer > 0:
+            self.backoff_timer -= dt
+
+        # Получаем данные с датчиков
+        s_front = car.sensors[3]  # Передний датчик (-20°)
+        s_right = car.sensors[5]  # Правый датчик (45°)
+        s_left = car.sensors[2]  # Левый датчик (-45°)
+
+        # Инициализируем front_distance значением по умолчанию
+        front_distance = s_front
+
+        # Используем исправленные задние датчики
+        min_rear_distance = car.get_min_rear_distance()
+        very_close_rear = car.get_very_close_rear()
+
+        # Анализируем изменение заднего расстояния для предотвращения столкновений
+        if hasattr(self, 'last_rear_distance'):
+            self.rear_distance_decreasing = min_rear_distance < self.last_rear_distance - 5
+        self.last_rear_distance = min_rear_distance
+
+        # Проверяем точные столкновения
+        has_collision_now, collided_with = car.check_collision_with_any(obstacles, margin=2)
+
+        # Увеличиваем safety_margin для менее чувствительной проверки
+        has_rear_collision_risk, rear_collision_distance = car.check_rear_collision(
+            obstacles, self.safety_margin / 2  # Удваиваем запас
+        )
+
+        if has_collision_now:
+            self.collision_count += 1
+            print(f"СТОЛКНОВЕНИЕ #{self.collision_count}! Фаза: {self.phase.name}")
+            car.speed = 0
+            car.steering = 0
+
+        inputs = {
+            "dist_right": s_right,
+            "dist_front": s_front,
+            "angle_error": car.angle,
+            "spot_distance": 500
+        }
+
+        # Если есть целевое место, вычисляем расстояние до него
+        if self.target_spot:
+            inputs["spot_distance"] = math.hypot(
+                car.x - self.target_spot.x,
+                car.y - self.target_spot.y
+            )
+
+        # Применяем нечеткую логику
+        fuzzy_result = self.fuzzy_system.compute(inputs)
+
+        # Базовая логика управления
+        throttle = 0.0
+        steering = 0.0
+        reasoning = ""
+
+        # Если обнаружено столкновение, останавливаемся
+        if has_collision_now and self.phase not in [ParkingPhase.SEARCHING, ParkingPhase.APPROACH]:
+            throttle = 0.0
+            steering = 0.0
+            reasoning = "СТОП: обнаружено столкновение!"
+            car.speed = throttle
+            car.steering = steering
+            return
+
+        # Обработка экстренной остановки
+        if self.emergency_stop:
+            self.emergency_stop_timer += dt
+            throttle = 0.0
+            steering = 0.0
+            reasoning = "ЭКСТРЕННАЯ ОСТАНОВКА!"
+
+            if self.emergency_stop_timer > 0.8:
+                # Включаем режим восстановления
+                self.emergency_stop = False
+                self.emergency_stop_timer = 0
+                self.recovering_from_emergency = True
+                self.recovery_timer = 1.0  # 1 секунда на восстановление
+                print("⚠️ Перехожу в режим восстановления после экстренной остановки")
+
+            car.speed = throttle
+            car.steering = steering
+            return
+
+        # Обработка восстановления после экстренной остановки
+        if self.recovering_from_emergency:
+            self.recovery_timer -= dt
+            if self.recovery_timer > 0:
+                # Во время восстановления отъезжаем от препятствия
+                throttle = 0.25  # Медленно вперед
+
+                if self.phase == ParkingPhase.REVERSE_RIGHT:
+                    steering = -15  # Влево, чтобы изменить траекторию
+                elif self.phase == ParkingPhase.REVERSE_LEFT:
+                    steering = 15  # Вправо, чтобы изменить траекторию
+                else:
+                    steering = 0
+
+                reasoning = f"Восстановление после экстренной остановки ({self.recovery_timer:.1f}с)"
+            else:
+                # Завершили восстановление
+                self.recovering_from_emergency = False
+                print("Восстановление завершено, продолжаю парковку")
+
+            car.speed = throttle
+            car.steering = steering
+            return
+
+        # Новая проверка выравнивания с линией - по всем углам машины
+        line_alignment_distance, line_angle_deviation = car.get_line_alignment(self.target_line_y)
+        angle_aligned = abs(car.angle) < 5  # Угол близок к 0° (параллельно линии)
+        distance_aligned = line_alignment_distance < self.alignment_tolerance
+
+        # Машина считается выровненной, если оба условия выполнены
+        self.aligned_with_main_line = angle_aligned and distance_aligned
+
+        if self.phase == ParkingPhase.SEARCHING:
+            self.parking_complete = False
+            self.stable_timer = 0
+            self.collision_detected = False
+            self.angle_history = []
+            self.emergency_stop = False
+            self.consecutive_backoffs = 0
+
+            # Используем нечеткую логику для поиска
+            throttle = fuzzy_result.get("throttle", 0.0)
+            steering = fuzzy_result.get("steering", 0.0)
+            reasoning = "Поиск места"
+
+            # Принудительное движение вперед при поиске
+            if throttle < 0.5 and s_front > 100:
+                throttle = 2.0
+                reasoning = "Ускорение: впереди нет препятствий"
+
+            # Автоматический поиск места с помощью анализа сенсоров
+            space_analysis = self.analyze_free_space(car, obstacles)
+
+            if space_analysis['found'] and not self.target_spot:
+                # Используем target_line_y для позиционирования места
+                # Для пустой дороги это будет выше (дальше от бордюра)
+                self.target_spot = ParkingSpot(
+                    x=space_analysis['position_x'],
+                    y=self.target_line_y,  # Используем целевую линию для Y-координаты
+                    width=110,
+                    length=140,
+                    occupied=False,
+                    gap_size=space_analysis['width']
+                )
+                self.phase = ParkingPhase.APPROACH
+                self.phase_timer = 0
+                print(f"✓ Найдено место анализом сенсоров!")
+                print(f"  Ширина: {space_analysis['width']:.1f}, место сзади: {space_analysis['rear_space']:.1f}")
+                print(
+                    f"  Линия парковки: y={self.target_line_y} ({'пустая дорога' if self.empty_road else 'обычная дорога'})")
+                print(f"⇨ Переход к фазе: ПОДЪЕЗД")
+
+        elif self.phase == ParkingPhase.APPROACH:
+            # Подъезжаем к месту
+            if self.target_spot:
+                target_x = self.target_spot.x + CAR_LENGTH * 1.8
+                dist = target_x - car.x
+
+                if dist > 50:
+                    throttle = 1.5
+                    # Корректируем положение относительно места
+                    target_y = self.target_spot.y - CAR_WIDTH * 1.5
+                    steering = -(car.y - target_y) * 0.01
+                    reasoning = f"Подъезд к месту (осталось: {dist:.0f})"
+                else:
+                    throttle = 0.0
+                    steering = 0.0
+                    reasoning = "Остановка для маневра"
+                    self.phase = ParkingPhase.POSITIONING
+                    self.phase_timer = 0
+                    print(f"⇨ Переход к фазе: ПОЗИЦИОНИРОВАНИЕ")
+
+        elif self.phase == ParkingPhase.POSITIONING:
+            # Комбинируем несколько условий для ранней остановки
+
+            if self.target_spot:
+                # 1. Проверяем расстояние до цели
+                target_x = self.target_spot.x + CAR_LENGTH * 1.5
+                dist_to_target = target_x - car.x
+
+                # 2. Проверяем угол
+                angle_ok = abs(car.angle) < 4
+
+                # 3. Проверяем, движемся ли мы вперед
+                moving_forward = car.speed > 0.1
+
+                # Останавливаемся, если:
+                # - Уже достаточно близко к цели (100 пикселей)
+                # - ИЛИ угол уже хороший
+                # - ИЛИ мы уже проехали мимо цели
+                if (dist_to_target < 100 and angle_ok) or dist_to_target < -50:
+                    throttle = 0.0
+                    steering = 0.0
+                    reasoning = f"Ранняя остановка (до цели: {dist_to_target:.0f}, угол: {car.angle:.1f}°)"
+
+                    # Даем небольшую паузу для стабилизации
+                    if self.phase_timer > 0.4:
+                        self.phase = ParkingPhase.REVERSE_RIGHT
+                        self.phase_timer = 0
+                        self.collision_detected = False
+                        self.consecutive_backoffs = 0
+                        print(f"⇨ Переход к фазе: ЗАДНИЙ МАНЕВР (ВПРАВО)")
+                else:
+                    # Продолжаем позиционирование
+                    throttle = 0.2  # Медленнее
+
+                    # Комбинированное управление
+                    angle_correction = -car.angle * 0.12
+                    # Дополнительная коррекция положения
+                    if dist_to_target > 0:
+                        position_correction = min(0.1, dist_to_target * 0.002)
+                    else:
+                        position_correction = max(-0.1, dist_to_target * 0.002)
+
+                    steering = angle_correction + position_correction
+
+                    # Ограничиваем максимальный угол поворота
+                    steering = max(-30, min(30, steering))
+
+                    reasoning = f"Позиционирование (до цели: {dist_to_target:.0f}, угол: {car.angle:.1f}°)"
+            else:
+                # Резервная логика
+                if abs(car.angle) > 3:
+                    throttle = 0.2
+                    steering = -car.angle * 0.1
+                    reasoning = f"Выравнивание (угл: {car.angle:.1f}°)"
+                else:
+                    throttle = 0.0
+                    steering = 0.0
+                    reasoning = "Готов к парковке"
+                    if self.phase_timer > 0.5:
+                        self.phase = ParkingPhase.REVERSE_RIGHT
+                        self.phase_timer = 0
+                        self.collision_detected = False
+                        self.consecutive_backoffs = 0
+                        print(f"⇨ Переход к фазе: ЗАДНИЙ МАНЕВР (ВПРАВО)")
+
+        elif self.phase == ParkingPhase.REVERSE_RIGHT:
+            # Задний маневр с поворотом вправо
+            max_speed_in_phase = 0.45  # Уменьшена
+
+            # Сохраняем историю углов
+            self.angle_history.append(car.angle)
+            if len(self.angle_history) > 10:
+                self.angle_history.pop(0)
+
+            # УСИЛЕННЫЙ КОНТРОЛЬ БЕЗОПАСНОСТИ: проверяем несколько условий
+            safety_conditions = [
+                very_close_rear,
+                min_rear_distance < self.emergency_stop_distance,
+                has_rear_collision_risk,
+                min_rear_distance < self.min_safe_distance and self.rear_distance_decreasing
+            ]
+
+            if any(safety_conditions):
+                throttle = 0.0
+                steering = 0.0
+                self.emergency_stop = True
+                self.emergency_stop_timer = 0
+                reasoning = "ЭКСТРЕННАЯ ОСТАНОВКА: риск столкновения сзади!"
+                print(f"⚠️ ЭКСТРЕННАЯ ОСТАНОВКА: заднее расстояние {min_rear_distance:.0f}")
+            elif min_rear_distance < self.reverse_stop_distance:
+                # Слишком близко - создаем зазор
+                if self.consecutive_backoffs >= 2:  # Уменьшено с 3 до 2
+                    # Слишком много попыток отъезда - переходим к следующей фазе
+                    self.phase = ParkingPhase.REVERSE_LEFT
+                    self.phase_timer = 0
+                    self.collision_detected = False
+                    self.consecutive_backoffs = 0
+                    print(f"⇨ Вынужденный переход: слишком много отъездов")
+                elif self.backoff_timer > 0:
+                    # Пауза после отъезда
+                    throttle = 0.0
+                    steering = 0.0
+                    reasoning = f"Пауза после отъезда: {self.backoff_timer:.1f}с"
+                else:
+                    # Отъезжаем вперед БЕЗ ПОВОРОТА для безопасности
+                    throttle = 0.35
+                    steering = 0.0  # Прямо, чтобы не усугубить ситуацию
+                    reasoning = f"Создаю зазор: {min_rear_distance:.0f}"
+                    self.backoff_timer = self.backoff_threshold
+                    self.consecutive_backoffs += 1
+                    print(f"⚠️ Создаю зазор #{self.consecutive_backoffs}, заднее: {min_rear_distance:.0f}")
+            elif min_rear_distance < self.reverse_slow_distance:
+                # Плавное замедление при приближении
+                speed_factor = (min_rear_distance - self.reverse_stop_distance) / (
+                        self.reverse_slow_distance - self.reverse_stop_distance
+                )
+                safe_speed = max(self.min_reverse_speed, max_speed_in_phase * speed_factor * 0.6)
+                throttle = -safe_speed
+                steering = 45 * self.reverse_steering_sensitivity  # Уменьшен угол
+                reasoning = f"Замедление: {min_rear_distance:.0f}, скорость: {safe_speed:.2f}"
+                # Сбрасываем счетчик отъездов при успешном движении
+                if min_rear_distance > self.reverse_stop_distance + 25:
+                    self.consecutive_backoffs = 0
+            else:
+                # Полная скорость, но с контролем
+                throttle = -max_speed_in_phase * 0.7  # Уменьшена
+                steering = 50 * self.reverse_steering_sensitivity  # Уменьшен угол
+                reasoning = f"Задний маневр (угл: {car.angle:.1f}°, зад: {min_rear_distance:.0f})"
+                # Сбрасываем счетчик отъездов при успешном движении
+                self.consecutive_backoffs = 0
+
+            # Переход в REVERSE_LEFT при достижении угла или расстояния до линии
+            # Для пустой дороги переход происходит быстрее (при меньшем угле)
+            if car.angle <= self.reverse_right_to_left_angle or line_alignment_distance < self.start_reverse_left_distance:
+                self.phase = ParkingPhase.REVERSE_LEFT
+                self.phase_timer = 0
+                self.collision_detected = False
+                self.consecutive_backoffs = 0
+                print(f"⇨ Переход к фазе: ВЫРАВНИВАНИЕ (ВЛЕВО)")
+                print(
+                    f"Условие перехода: угол={car.angle:.1f}° (порог: {self.reverse_right_to_left_angle}°), до линии={line_alignment_distance:.0f} (порог: {self.start_reverse_left_distance})")
+                print(f"Дорога пустая: {'ДА' if self.empty_road else 'НЕТ'}")
+
+        elif self.phase == ParkingPhase.REVERSE_LEFT:
+            # Активный поворот влево с повышенным контролем безопасности
+            max_speed_in_phase = self.reverse_left_speed
+
+            # УСИЛЕННЫЙ КОНТРОЛЬ БЕЗОПАСНОСТИ
+            safety_conditions = [
+                very_close_rear,
+                min_rear_distance < self.emergency_stop_distance,
+                has_rear_collision_risk,
+                min_rear_distance < self.min_safe_distance and self.rear_distance_decreasing
+            ]
+
+            if any(safety_conditions):
+                throttle = 0.0
+                steering = 0.0
+                self.emergency_stop = True
+                self.emergency_stop_timer = 0
+                reasoning = "ЭКСТРЕННАЯ ОСТАНОВКА: риск столкновения сзади!"
+                print(f"⚠️ ЭКСТРЕННАЯ ОСТАНОВКА в REVERSE_LEFT: {min_rear_distance:.0f}")
+            elif min_rear_distance < self.reverse_stop_distance:
+                # Слишком близко - создаем зазор
+                if self.consecutive_backoffs >= 2:
+                    # Слишком много попыток - переходим к финальной корректировке
+                    throttle = 0.0
+                    steering = 0.0
+                    self.phase = ParkingPhase.FINAL_ADJUST
+                    self.phase_timer = 0
+                    self.consecutive_backoffs = 0
+                    print(f"⇨ Вынужденный переход к финальной корректировке")
+                elif self.backoff_timer > 0:
+                    # Пауза после отъезда
+                    throttle = 0.0
+                    steering = 0.0
+                    reasoning = f"Пауза после отъезда: {self.backoff_timer:.1f}с"
+                else:
+                    # Отъезжаем вперед БЕЗ ПОВОРОТА для безопасности
+                    throttle = 0.35
+                    steering = 0.0  # Прямо
+                    reasoning = f"Создаю зазор: {min_rear_distance:.0f}"
+                    self.backoff_timer = self.backoff_threshold
+                    self.consecutive_backoffs += 1
+                    print(f"⚠️ Создаю зазор #{self.consecutive_backoffs} в REVERSE_LEFT")
+            elif min_rear_distance < self.reverse_slow_distance:
+                # Плавное замедление при приближении
+                speed_factor = (min_rear_distance - self.reverse_stop_distance) / (
+                        self.reverse_slow_distance - self.reverse_stop_distance
+                )
+                safe_speed = max(self.min_reverse_speed * 0.5, max_speed_in_phase * speed_factor * 0.5)
+                throttle = -safe_speed
+
+                # Активный поворот влево с регулировкой по углу
+                if car.angle < -15:  # Если угол все еще отрицательный (машина наклонена вправо)
+                    steering = self.reverse_left_steering_angle * self.reverse_left_steering_multiplier
+                elif car.angle < -5:  # Близко к нулю
+                    steering = -25  # Меньше
+                elif car.angle > 10:  # Наклонены влево
+                    steering = -self.reverse_left_steering_angle * 0.8  # Меньше
+                else:  # Почти выровнены
+                    steering = -20  # Еще меньше
+
+                reasoning = f"Выравнивание ({min_rear_distance:.0f}, угол: {car.angle:.1f}°)"
+                # Сбрасываем счетчик отъездов при успешном движении
+                if min_rear_distance > self.reverse_stop_distance + 25:
+                    self.consecutive_backoffs = 0
+            else:
+                # Движение назад с активным поворотом влево
+                throttle = -max_speed_in_phase * 0.6  # Уменьшена
+
+                # Регулируем силу поворота в зависимости от текущего угла
+                if car.angle < -20:  # Сильно наклонены вправо
+                    steering = self.reverse_left_steering_angle * 1.6  # Уменьшено
+                elif car.angle < -8:  # Умеренно наклонены вправо
+                    steering = self.reverse_left_steering_angle * 1.2  # Уменьшено
+                elif car.angle > 12:  # Наклонены влево
+                    steering = -self.reverse_left_steering_angle * 0.7  # Уменьшено
+                else:  # Близко к выравнивания
+                    steering = -15  # Еще меньше
+
+                reasoning = f"Активное выравнивание (до линии: {line_alignment_distance:.0f}, угол: {car.angle:.1f}°)"
+                # Сбрасываем счетчик отъездов при успешном движении
+                self.consecutive_backoffs = 0
+
+            # Проверка боковой безопасности
+            if s_left < self.side_safety_distance:
+                correction = (self.side_safety_distance - s_left) * 0.1  # Уменьшен коэффициент
+                steering = min(steering + correction, 0)
+                reasoning = f"Коррекция: близко слева ({s_left:.0f})"
+
+            # Переход к финальной корректировке при выравнивании или по таймауту
+            if (self.aligned_with_main_line) or self.phase_timer > 6.0:
+                throttle = 0.0
+                steering = 0.0
+                self.phase = ParkingPhase.FINAL_ADJUST
+                self.phase_timer = 0
+                self.consecutive_backoffs = 0
+                # Инициализация параметров циклического выравнивания
+                self.alignment_cycles = 0
+                self.alignment_state = "forward"
+                self.alignment_state_timer = 0
+                self.alignment_interrupted = False
+                self.last_alignment_state = None
+                self.alignment_attempts = 0
+                self.initial_angle_when_aligned = car.angle
+                print(f"⇨ Переход к фазе: ФИНАЛЬНАЯ КОРРЕКТИРОВКА")
+                print(f"Начинаю циклическое выравнивание (максимум {self.max_alignment_cycles} циклов)")
+
+        elif self.phase == ParkingPhase.FINAL_ADJUST:
+            # Финальная корректировка с циклическими движениями вперед-назад
+            # ПОНИЖЕННАЯ ЧУВСТВИТЕЛЬНОСТЬ ПЕРЕДНИХ ДАТЧИКОВ В ЭТОЙ ФАЗЕ
+
+            # Используем оба передних датчиков для большей надежности
+            front_left_sensor = car.sensors[3]  # -20° - главный передний
+            front_right_sensor = car.sensors[4]  # 20° - правый передний
+            # Используем максимальное расстояние (меньшая чувствительность)
+            front_distance = max(front_left_sensor, front_right_sensor)
+
+            if self.target_spot:
+                # Проверка безопасности перед любым движением
+                # УВЕЛИЧИЛИ порог срабатывания для меньшей чувствительности
+                safety_conditions_forward = [
+                    front_distance < 20 and car.speed > 0,  # Было < 40, теперь < 20 (меньшая чувствительность)
+                    has_collision_now,
+                ]
+
+                safety_conditions_backward = [
+                    very_close_rear,
+                    min_rear_distance < self.emergency_stop_distance,
+                    has_rear_collision_risk,
+                ]
+
+                # Обновляем таймер состояния
+                self.alignment_state_timer += dt
+
+                # Обработка прерываний из-за безопасности
+                if any(safety_conditions_forward) and self.alignment_state == "forward":
+                    throttle = 0.0
+                    steering = 0.0
+                    self.last_alignment_state = self.alignment_state
+                    self.alignment_state = "pause"
+                    self.alignment_state_timer = 0
+                    self.alignment_interrupted = True
+                    reasoning = f"Прервано: близко спереди ({front_distance:.0f})"
+                    print(f"⚠️ Прервано движение вперед: спереди {front_distance:.0f}")
+
+                elif any(safety_conditions_backward) and self.alignment_state == "backward":
+                    throttle = 0.0
+                    steering = 0.0
+                    self.last_alignment_state = self.alignment_state
+                    self.alignment_state = "pause"
+                    self.alignment_state_timer = 0
+                    self.alignment_interrupted = True
+                    reasoning = f"Прервано: близко сзади ({min_rear_distance:.0f})"
+                    print(f"⚠️ Прервано движение назад: сзади {min_rear_distance:.0f}")
+
+                else:
+                    # Выполняем нормальный цикл выравнивания
+                    if self.alignment_cycles >= self.max_alignment_cycles:
+                        # Завершаем парковку
+                        throttle = 0.0
+                        steering = 0.0
+                        reasoning = f"Циклическое выравнивание завершено ({self.alignment_cycles}/{self.max_alignment_cycles} циклов)"
+
+                        # Проверяем окончательную позицию
+                        if car.x < self.target_spot.x - 10:
+                            # Проверка безопасности перед движением вперед
+                            if front_distance > 25:  # Увеличили порог с 40 до 25
+                                throttle = 0.1
+                                steering = 0.0
+                                reasoning = "Финальный подъезд вперед"
+                            else:
+                                throttle = 0.0
+                                steering = 0.0
+                                reasoning = f"СТОП: близко спереди ({front_distance:.0f})"
+                        elif car.x > self.target_spot.x + 10:
+                            # Проверка безопасности перед движением назад
+                            if min_rear_distance > 25:  # Увеличили порог с 40 до 25
+                                throttle = -0.1
+                                steering = 0.0
+                                reasoning = "Финальный подъезд назад"
+                            else:
+                                throttle = 0.0
+                                steering = 0.0
+                                reasoning = f"СТОП: близко сзади ({min_rear_distance:.0f})"
+                        else:
+                            # Переходим в фазу PARKED
+                            self.phase = ParkingPhase.PARKED
+                            self.phase_timer = 0
+                            print(f"⇨ Переход к фазе: ПАРКОВКА ЗАВЕРШЕНА")
+                    else:
+                        # Выполняем циклическое выравнивание
+                        if self.alignment_state == "forward":
+                            # Движение вперед с поворотом для выравнивания
+                            throttle = self.alignment_speed * 0.8
+
+                            # Определяем направление поворота для выравнивания
+                            if car.angle > 1:  # Машина наклонена влево
+                                steering = -self.alignment_steering_angle * 5  # Поворачиваем вправо
+                                steering_direction = "вправо"
+                            elif car.angle < -1:  # Машина наклонена вправо
+                                steering = self.alignment_steering_angle * 5  # Поворачиваем влево
+                                steering_direction = "влево"
+                            else:  # Почти ровно
+                                steering = 0
+                                steering_direction = "прямо"
+
+                            reasoning = f"Цикл {self.alignment_cycles + 1}/{self.max_alignment_cycles}: Вперед, руль {steering_direction} ({car.angle:.1f}°)"
+
+                            # Проверяем завершение движения вперед
+                            if self.alignment_state_timer >= self.alignment_forward_duration:
+                                self.last_alignment_state = self.alignment_state
+                                self.alignment_state = "pause"
+                                self.alignment_state_timer = 0
+                                reasoning = f"Пауза между движениями"
+
+                        elif self.alignment_state == "pause":
+                            # Пауза между движениями
+                            throttle = 0.0
+                            steering = 0.0
+
+                            # Определяем, что делать после паузы
+                            if self.alignment_state_timer >= self.alignment_pause_duration:
+                                if self.alignment_interrupted:
+                                    # После прерывания продолжаем тот же цикл
+                                    self.alignment_state = self.last_alignment_state
+                                    self.alignment_attempts += 1
+                                    reasoning = f"Повтор цикла после прерывания (попытка {self.alignment_attempts})"
+
+                                    # Если слишком много попыток, переходим к следующему циклу
+                                    if self.alignment_attempts >= 2:
+                                        self.alignment_cycles += 1
+                                        self.alignment_attempts = 0
+                                        reasoning = f"Пропуск цикла {self.alignment_cycles}/{self.max_alignment_cycles} после неудачи"
+                                else:
+                                    # Нормальное чередование
+                                    if self.last_alignment_state == "forward":
+                                        self.alignment_state = "backward"
+                                    elif self.last_alignment_state == "backward":
+                                        self.alignment_state = "forward"
+
+                                self.alignment_state_timer = 0
+                                self.alignment_interrupted = False
+                            else:
+                                reasoning = f"Пауза ({self.alignment_state_timer:.1f}/{self.alignment_pause_duration}с)"
+
+                        elif self.alignment_state == "backward":
+                            # Движение назад с противоположным поворотом
+                            throttle = -self.alignment_speed * 0.8
+
+                            # Противоположный поворот для компенсации
+                            if car.angle > 1:  # Машина наклонена влево
+                                steering = self.alignment_steering_angle * 5  # Поворачиваем влево
+                                steering_direction = "влево"
+                            elif car.angle < -1:  # Машина наклонена вправо
+                                steering = -self.alignment_steering_angle * 5  # Поворачиваем вправо
+                                steering_direction = "вправо"
+                            else:  # Почти ровно
+                                steering = 0
+                                steering_direction = "прямо"
+
+                            reasoning = f"Цикл {self.alignment_cycles + 1}/{self.max_alignment_cycles}: Назад, руль {steering_direction} ({car.angle:.1f}°)"
+
+                            # Проверяем завершение движения назад
+                            if self.alignment_state_timer >= self.alignment_backward_duration:
+                                self.last_alignment_state = self.alignment_state
+                                self.alignment_state = "pause"
+                                self.alignment_state_timer = 0
+                                self.alignment_cycles += 1
+                                self.alignment_attempts = 0
+                                print(
+                                    f"Завершен цикл выравнивания {self.alignment_cycles}/{self.max_alignment_cycles}, угол: {car.angle:.1f}°")
+
+                                # Если достигли хорошего угла, можно завершить раньше
+                                if abs(car.angle) < 1.0 and line_alignment_distance < 10:
+                                    self.alignment_cycles = self.max_alignment_cycles  # Завершаем
+                                    reasoning = f"Отличное выравнивание! Угол: {car.angle:.1f}°, до линии: {line_alignment_distance:.0f}"
+
+        elif self.phase == ParkingPhase.PARKED:
+            throttle = 0.0
+            steering = 0.0
+            reasoning = "Парковка завершена"
+
+            if abs(car.speed) < 0.1 and abs(car.angle) < 1.0:
+                self.stable_timer += dt
+                if self.stable_timer > 1.0:
+                    self.parking_complete = True
+            else:
+                self.stable_timer = 0
+
+        # Применяем управление
+        car.speed = throttle
+        car.steering = steering
+
+        # Отладочная информация
+        self.debug_info = {
+            "Phase": self.phase.name,
+            "Reasoning": reasoning,
+            "Throttle": f"{throttle:.2f}",
+            "Steering": f"{steering:.2f}",
+            "Rear_Dist": f"{min_rear_distance:.0f}",
+            "Left_Side": f"{s_left:.0f}",
+            "To_Line_Dist": f"{line_alignment_distance:.0f}",
+            "Line_Angle": f"{line_angle_deviation:.1f}°",
+            "Aligned": "ДА" if self.aligned_with_main_line else "НЕТ",
+            "Very_Close": "ДА" if very_close_rear else "НЕТ",
+            "Emergency": "ДА" if self.emergency_stop else "НЕТ",
+            "Collision": "ДА" if has_collision_now else "НЕТ",
+            "Col_Count": f"{self.collision_count}",
+            "Backoffs": f"{self.consecutive_backoffs}",
+            "Backoff_Timer": f"{self.backoff_timer:.1f}",
+            "Rear_Risk": "ДА" if has_rear_collision_risk else "НЕТ",
+            "Rear_Decr": "ДА" if self.rear_distance_decreasing else "НЕТ",
+            "Car_Angle": f"{car.angle:.1f}°",
+            "Car_X": f"{car.x:.0f}",
+            "Car_Y": f"{car.y:.0f}",
+            "Align_Cycles": f"{self.alignment_cycles}/{self.max_alignment_cycles}" if self.phase == ParkingPhase.FINAL_ADJUST else "N/A",
+            "Align_State": self.alignment_state if self.phase == ParkingPhase.FINAL_ADJUST else "N/A",
+            "Front_Dist": f"{front_distance:.0f}",
+            "Align_Attempts": f"{self.alignment_attempts}" if self.phase == ParkingPhase.FINAL_ADJUST else "N/A",
+            "Empty_Road": "ДА" if self.empty_road else "НЕТ",
+            "Target_Line_Y": f"{self.target_line_y}",
+            "R2L_Angle": f"{self.reverse_right_to_left_angle}°",
+            "R2L_Dist": f"{self.start_reverse_left_distance}"
+        }
+
+    def analyze_free_space(self, car, obstacles):
+        """Анализирует свободное пространство с помощью сенсоров"""
+        # Получаем расстояния с нескольких датчиков
+        right_distances = [
+            min(car.sensors[5], 200),  # Правый 45°
+            min(car.sensors[6], 200),  # Правый 90°
+            min(car.sensors[7], 200)  # Правый 135°
+        ]
+
+        # Проверяем, достаточно ли места по всем датчикам
+        avg_right_distance = sum(right_distances) / len(right_distances)
+
+        # Получаем заднее расстояние
+        rear_distance = car.get_min_rear_distance()
+
+        # ОСОБЫЙ СЛУЧАЙ: при пустой дороге (все датчики показывают максимальные значения)
+        # Используем необработанные значения датчиков для определения, пустая ли дорога
+        raw_right_distances = [car.sensors[5], car.sensors[6], car.sensors[7]]
+        avg_raw_right_distance = sum(raw_right_distances) / len(raw_right_distances)
+
+        # Если дорога пустая (все датчики показывают почти максимальное значение)
+        # и есть достаточно места сзади, создаем виртуальное место в правильной позиции
+        if avg_raw_right_distance > 380 and rear_distance > 300 and len(
+                obstacles) <= 2:  # <= 2 потому что есть виртуальные границы
+            # Дорога пустая - создаем виртуальное место на правильном расстоянии от бордюра
+            # Позиция должна быть такой, чтобы при парковке машина была правильно расположена относительно бордюра
+            # Используем target_line_y, который уже установлен в зависимости от того, пустая ли дорога
+            return {
+                'found': True,
+                'width': CAR_LENGTH * 3,  # Широкое место
+                'position_x': car.x + 400,  # Смещаем место вперед от текущей позиции
+                'position_y': self.target_line_y,  # Используем целевую линию (для пустой дороги она выше)
+                'rear_space': rear_distance
+            }
+
+        # Обычная логика для непустых дорог
+        if avg_right_distance > CAR_LENGTH * 2.0:
+            if rear_distance > CAR_LENGTH:
+                return {
+                    'found': True,
+                    'width': avg_right_distance,
+                    'position_x': car.x,
+                    'position_y': self.target_line_y,  # Используем целевую линию
+                    'rear_space': rear_distance
+                }
+
+        return {'found': False}
+
+
+class HybridParkingSimulation:
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        pygame.display.set_caption("ЭКСПЕРТНАЯ СИСТЕМА ПАРКОВКИ - РАБОЧАЯ ВЕРСИЯ")
+        pygame.display.set_caption("ПАРАЛЛЕЛЬНАЯ ПАРКОВКА")
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont("Arial", 22)
+        # Единый шрифт для всего текста
+        self.ui_font = pygame.font.SysFont("Arial", 20)
         self.small_font = pygame.font.SysFont("Arial", 16)
 
-        # Конфигурация
-        config = ParkingConfig(
-            turn_radius_ratio=2.5,
-            sensor_range=SENSOR_RANGE,
-            max_speed=2.5,
-            max_reverse_speed=1.5,
-            safety_margin=30.0,
-            steering_sensitivity=0.3
-        )
-
-        # Экспертная система
-        self.expert_system = ExpertSystem(config)
-
-        # Парковочные места
-        self.parking_spots = self._create_parking_spots()
-
-        # Припаркованные машины
-        self.obstacle_cars = [
-            Car(600, HEIGHT - 150, 0, (200, 0, 0)),
-            Car(900, HEIGHT - 150, 0, (200, 0, 0)),
-        ]
-
-        # Генерируем случайные машины - заменяет предыдущую секцию
-        self.obstacle_cars = self.generate_random_cars()
-
-        # Основной автомобиль
-        self.player_car = Car(200, HEIGHT - 200, 0)
-        self.player_car.turning_radius = CAR_LENGTH * config.turn_radius_ratio
-
-        # Состояние системы
-        self.current_phase = ParkingPhase.SEARCHING
-        self.selected_spot = None
-        self.parked = False
-        self.decision_info: Optional[DecisionInfo] = None
-        self.phase_timer = 0
-        self.current_sensors = [SENSOR_RANGE] * 8
-        self.rule_applied = "Начало движения"
+        # Инициализация
+        self.reset()
         self.start_time = pygame.time.get_ticks()
 
-        # Статистика
-        self.rules_applied_count = {}
+        # Флаги отображения
+        self.show_sensors = True  # Новый флаг для датчиков
+        self.show_alignment_lines = True  # Флаг для линий выравнивания
+        self.show_help = False  # Флаг для показа справки
+        self.show_labels = True  # Флаг для надписей
 
-        print("=" * 60)
-        print("ЭКСПЕРТНАЯ СИСТЕМА ПАРКОВКИ ЗАПУЩЕНА")
-        print("=" * 60)
-        print("Ожидайте начала движения...")
-        print("=" * 60)
+        # НОВЫЙ ФЛАГ: пауза игры
+        self.paused = False  # По умолчанию игра не на паузе
 
-    def _create_parking_spots(self) -> List[ParkingSpot]:
-        """Создание парковочных мест"""
-        spots = []
-        spot_positions = [400, 550, 700, 850, 1000, 1150]
+        # Флаг для определения пустой дороги
+        self.empty_road = False
 
-        for i, x in enumerate(spot_positions):
-            occupied = (i == 1 or i == 3)  # 2 занятых места
-            spots.append(ParkingSpot(
-                x=x,
-                y=HEIGHT - 150,
-                width=100,
-                length=120,
-                occupied=occupied,
-                suitable=not occupied
+    def reset(self):
+        # Инициализация пустых списков
+        self.obstacle_cars = []
+        self.parking_spots = []
+
+        # Генерация случайной улицы
+        self.generate_random_street()
+
+        # Игрок
+        self.player_car = Car(50, HEIGHT - 220, 0)
+
+        # Контроллер с передачей информации о пустой дороге
+        self.controller = HybridParkingController(empty_road=self.empty_road)
+
+        # UI состояние
+        self.parked = False
+        self.paused = False  # Сбрасываем паузу при рестарте
+
+        self.target_spot = None
+
+    def generate_random_street(self):
+        """Генерация случайной улицы с машинами и парковочными местами между ними"""
+        self.obstacle_cars = []
+        self.parking_spots = []  # Очищаем список парковочных мест
+
+        num_obstacles = random.randint(0, 6)
+
+        # Устанавливаем флаг пустой дороги
+        self.empty_road = (num_obstacles == 0)
+
+        # ОСОБЫЙ СЛУЧАЙ: при пустой дороге создаем виртуальные препятствия по краям
+        # чтобы задать правильные границы для парковки
+        if self.empty_road:
+            # Создаем два виртуальных препятствия по краям, чтобы задать границы парковки
+            # Они будут невидимыми, но обеспечат правильное поведение датчиков
+            left_boundary = Car(-100, HEIGHT - 150, 0, (150, 50, 50))
+            right_boundary = Car(WIDTH + 100, HEIGHT - 150, 0, (150, 50, 50))
+            self.obstacle_cars.append(left_boundary)
+            self.obstacle_cars.append(right_boundary)
+
+            # Также создаем виртуальное парковочное место в середине дороги
+            # чтобы контроллер мог его обнаружить
+            # Используем линию парковки, которая будет соответствовать target_line_y в контроллере
+            # Для пустой дороги это будет HEIGHT - 180 (приподнятая линия)
+            self.parking_spots.append(ParkingSpot(
+                x=WIDTH // 2,
+                y=HEIGHT - 180,  # Приподнятая линия для пустой дороги
+                width=110,
+                length=140,
+                occupied=False,
+                gap_size=300  # Широкий промежуток для пустой дороги
             ))
+            print(f"Создана пустая дорога с виртуальными границами и местом для парковки")
+            print(f"Линия парковки приподнята до y={HEIGHT - 180} (обычная: y={HEIGHT - 150})")
+            print(f"Переход из REVERSE_RIGHT в REVERSE_LEFT будет быстрее (угол: -35° вместо -47°)")
+        else:
+            # Обычная генерация препятствий
+            current_x = 100
+            for i in range(num_obstacles):
+                # Добавляем машину-препятствие
+                car = Car(current_x, HEIGHT - 150, 0, (150, 50, 50))
+                self.obstacle_cars.append(car)
 
-        return spots
+                # Сдвигаем позицию для следующей машины
+                current_x += CAR_LENGTH + random.uniform(20, CAR_LENGTH * 2.5)
+                if current_x > WIDTH:
+                    break
 
-    def generate_random_cars(self):
-        """Создание машин в случайных парковочных местах"""
-        Vector3 = Tuple[float, float, float]
-
-        PARKING_FILLING = 0.7
-        MAX_OFFSET = 5
-
-        obstacle_cars = []
-        
-        for spot in self.parking_spots:
-            if random.random() < PARKING_FILLING:
-                offset = (
-                    random.uniform(-MAX_OFFSET, MAX_OFFSET),
-                    random.uniform(-MAX_OFFSET, MAX_OFFSET)
-                )
-                final_pos = (spot.x + offset[0],
-                             spot.y + offset[1])
-                
-                car = Car(final_pos[0], final_pos[1], 0, (200, 0, 0))
-                obstacle_cars.append(car)
-                
-        return obstacle_cars
-
-
-    def find_best_parking_spot(self) -> Optional[ParkingSpot]:
-        """Поиск наилучшего парковочного места"""
-        available_spots = [spot for spot in self.parking_spots if not spot.occupied]
-
-        if not available_spots:
-            return None
-
-        # Выбираем место подальше от препятствий
-        best_spot = None
-        max_distance = 0
-
-        for spot in available_spots:
-            min_dist_to_obstacle = float('inf')
-            for obs in self.obstacle_cars:
-                dist = abs(obs.x - spot.x)
-                if dist < min_dist_to_obstacle:
-                    min_dist_to_obstacle = dist
-
-            if min_dist_to_obstacle > max_distance:
-                max_distance = min_dist_to_obstacle
-                best_spot = spot
-
-        if best_spot:
-            print(f"✓ Найдено парковочное место: X={best_spot.x}")
-
-        return best_spot
+        # Вывод информации о созданных местах
+        print(f"\nСгенерировано {len(self.obstacle_cars)} машин-препятствий")
+        print(f"Найдено {len(self.parking_spots)} парковочных мест")
+        print(f"Дорога пустая: {'ДА' if self.empty_road else 'НЕТ'}")
 
     def run(self):
         running = True
         while running:
             dt = self.clock.tick(FPS) / 1000.0
-            self.phase_timer += dt
 
             # Обработка событий
             for event in pygame.event.get():
@@ -769,364 +1454,264 @@ class ParkingSimulation:
                         print("\n" + "=" * 60)
                         print("ПЕРЕЗАПУСК СИСТЕМЫ...")
                         print("=" * 60)
-                        self.__init__()
-                        continue
+                        self.reset()
                     elif event.key == pygame.K_s:
-                        self.save_decision_log()
-                    elif event.key == pygame.K_SPACE:
-                        self.manual_phase_transition()
-                    elif event.key == pygame.K_p:
-                        self.print_rules_info()
-                    elif event.key == pygame.K_d:
-                        self.debug_info()
+                        self.show_sensors = not self.show_sensors
+                        print(f"Датчики: {'ВКЛ' if self.show_sensors else 'ВЫКЛ'}")
+                    elif event.key == pygame.K_a:
+                        self.show_alignment_lines = not self.show_alignment_lines
+                        print(f"Линии выравнивания: {'ВКЛ' if self.show_alignment_lines else 'ВЫКЛ'}")
+                    elif event.key == pygame.K_h:
+                        # ИЗМЕНЕНО: теперь H включает/выключает паузу и показывает/скрывает справку
+                        self.paused = not self.paused
+                        # Показываем справку только когда игра на паузе
+                        self.show_help = self.paused
+                        if self.paused:
+                            print("ИГРА НА ПАУЗЕ (нажмите H для продолжения)")
+                        else:
+                            print("ИГРА ПРОДОЛЖАЕТСЯ")
+                    elif event.key == pygame.K_n:
+                        self.show_labels = not self.show_labels
+                        print(f"Надписи: {'ВКЛ' if self.show_labels else 'ВЫКЛ'}")
 
-            # Обновление сенсоров
+            # Если игра на паузе, не обновляем состояние
+            if self.paused:
+                # Обновляем только отрисовку
+                self.draw()
+                pygame.display.flip()
+                continue
+
+            # Обновление сенсоров (только если игра не на паузе)
             all_obstacles = self.obstacle_cars.copy()
-            self.current_sensors = self.player_car.update_sensors(all_obstacles)
+            self.player_car.update_sensors(all_obstacles)
 
-            # Автоматический поиск места
-            if self.current_phase == ParkingPhase.SEARCHING and not self.selected_spot:
-                if self.phase_timer > 0.5 and self.player_car.x > 250:
-                    self.selected_spot = self.find_best_parking_spot()
-
-            # Принятие решения
-            self.decision_info = self.expert_system.make_decision(
-                self.current_phase,
-                self.current_sensors,
-                (self.player_car.x, self.player_car.y),
-                self.player_car.angle,
-                self.selected_spot
-            )
-
-            # Статистика правил
-            rule_name = self.decision_info.get("rule_applied", "unknown")
-            self.rule_applied = rule_name
-            if rule_name in self.rules_applied_count:
-                self.rules_applied_count[rule_name] += 1
-            else:
-                self.rules_applied_count[rule_name] = 1
-
-            # Применение решения
-            if self.decision_info.get("emergency", False):
-                self.player_car.speed = 0.0
-                self.player_car.steering = 0.0
-            else:
-                self.player_car.speed = float(self.decision_info["throttle"])
-                self.player_car.steering = float(self.decision_info["steering"])
-
-            # Обновление автомобиля
+            # Обновление позиции машины
             self.player_car.update(dt)
 
-            # Автоматические переходы фаз
-            self.handle_phase_transitions()
+            # Обновление контроллера
+            self.controller.update(self.player_car, self.parking_spots, all_obstacles, dt)
 
             # Отрисовка
             self.draw()
-
-            if self.parked:
-                self.draw_success_message()
 
             pygame.display.flip()
 
         pygame.quit()
         sys.exit()
 
-    def handle_phase_transitions(self):
-        """Обработка переходов между фазами"""
-
-        if self.current_phase == ParkingPhase.SEARCHING:
-            if self.selected_spot and self.player_car.x > self.selected_spot.x - 50:
-                self.current_phase = ParkingPhase.APPROACH
-                self.phase_timer = 0
-                print(f"\n⇨ Переход к фазе: ПОДЪЕЗД")
-                print(f"   Цель: X={self.selected_spot.x}")
-
-        elif self.current_phase == ParkingPhase.APPROACH:
-            if self.player_car.x > self.selected_spot.x + CAR_LENGTH * 1.2:
-                self.current_phase = ParkingPhase.POSITIONING
-                self.phase_timer = 0
-                print(f"\n⇨ Переход к фазе: ПОЗИЦИОНИРОВАНИЕ")
-
-        elif self.current_phase == ParkingPhase.POSITIONING:
-            if self.phase_timer > 3.0:
-                self.current_phase = ParkingPhase.PREPARE_REVERSE
-                self.phase_timer = 0
-                print(f"\n⇨ Переход к фазе: ПОДГОТОВКА К РЕВЕРСУ")
-
-        elif self.current_phase == ParkingPhase.PREPARE_REVERSE:
-            if self.phase_timer > 0.5:
-                self.current_phase = ParkingPhase.REVERSE_RIGHT
-                self.phase_timer = 0
-                print(f"\n⇨ Переход к фазе: ЗАДНИЙ МАНЕВР (ВПРАВО)")
-
-        elif self.current_phase == ParkingPhase.REVERSE_RIGHT:
-            if self.player_car.angle < -25:
-                self.current_phase = ParkingPhase.REVERSE_LEFT
-                self.phase_timer = 0
-                print(f"\n⇨ Переход к фазе: ВЫРАВНИВАНИЕ (ВЛЕВО)")
-
-        elif self.current_phase == ParkingPhase.REVERSE_LEFT:
-            if abs(self.player_car.angle) < 5 or self.phase_timer > 4.0:
-                self.current_phase = ParkingPhase.FINAL_ADJUST
-                self.phase_timer = 0
-                print(f"\n⇨ Переход к фазе: ФИНАЛЬНАЯ КОРРЕКТИРОВКА")
-
-        elif self.current_phase == ParkingPhase.FINAL_ADJUST:
-            if self.phase_timer > 3.0:
-                self.current_phase = ParkingPhase.PARKED
-                self.parked = True
-                print(f"\n" + "=" * 60)
-                print("✓ ПАРКОВКА УСПЕШНО ЗАВЕРШЕНА!")
-                print("=" * 60)
-
-    def manual_phase_transition(self):
-        """Ручной переход фаз"""
-        phases = list(ParkingPhase)
-        current_index = phases.index(self.current_phase)
-        next_index = (current_index + 1) % (len(phases) - 1)
-        old_phase = self.current_phase.value
-        self.current_phase = phases[next_index]
-        self.phase_timer = 0
-        print(f"\n⇨ Ручной переход: {old_phase} → {self.current_phase.value}")
-
-    def print_rules_info(self):
-        """Вывод информации о правилах"""
-        print("\n" + "=" * 60)
-        print("СТАТИСТИКА ПРИМЕНЕНИЯ ПРАВИЛ:")
-        print("=" * 60)
-
-        total = sum(self.rules_applied_count.values())
-        for rule_name, count in sorted(self.rules_applied_count.items(),
-                                       key=lambda x: x[1], reverse=True):
-            percentage = (count / total) * 100
-            print(f"  {rule_name}: {count} раз ({percentage:.1f}%)")
-
-        print(f"\nВсего решений: {total}")
-        print("=" * 60)
-
-    def debug_info(self):
-        """Отладочная информация"""
-        print("\n" + "=" * 60)
-        print("ОТЛАДОЧНАЯ ИНФОРМАЦИЯ:")
-        print("=" * 60)
-        print(f"Фаза: {self.current_phase.value}")
-        print(f"Время фазы: {self.phase_timer:.1f}с")
-        print(f"Позиция: ({self.player_car.x:.0f}, {self.player_car.y:.0f})")
-        print(f"Угол: {self.player_car.angle:.1f}°")
-        print(f"Скорость: {self.player_car.speed:.2f}")
-        print(f"Руль: {self.player_car.steering:.1f}°")
-
-        if self.selected_spot:
-            dx = self.selected_spot.x - self.player_car.x
-            dy = self.selected_spot.y - self.player_car.y
-            dist = math.hypot(dx, dy)
-            print(f"Цель: X={self.selected_spot.x}, расстояние: {dist:.0f}")
-
-        print(f"Активное правило: {self.rule_applied}")
-        print("=" * 60)
-
     def draw(self):
-        """Отрисовка всей сцены"""
-        self.screen.fill((30, 30, 30))
+        # Фон
+        self.screen.fill((40, 44, 52))
 
         # Дорога
-        pygame.draw.rect(self.screen, (70, 70, 70),
-                         (0, HEIGHT - 320, WIDTH, 270))
+        pygame.draw.rect(self.screen, (80, 80, 90), (0, HEIGHT - 300, WIDTH, 300))
 
-        # Разметка
+        # Разметка дороги
         for i in range(0, WIDTH, 60):
             pygame.draw.line(self.screen, (255, 255, 200),
                              (i, HEIGHT - 200), (i + 30, HEIGHT - 200), 3)
 
-        # Бордюр
-        pygame.draw.line(self.screen, (200, 200, 200),
-                         (0, HEIGHT - 150), (WIDTH, HEIGHT - 150), 3)
+        # Бордюр (основная линия автомобилей)
+        curb_y = HEIGHT - 115
+        pygame.draw.line(self.screen, (255, 200, 0),
+                         (0, curb_y), (WIDTH, curb_y), 5)
 
-        # Парковочные места
-        for spot in self.parking_spots:
-            color = (0, 220, 0) if not spot.occupied else (220, 50, 50)
-            if spot == self.selected_spot:
-                color = (255, 255, 0)
+        # Область ниже бордюра (тротуар) - желтым цветом
+        pygame.draw.rect(self.screen, (255, 255, 150, 100),
+                         (0, curb_y + 1, WIDTH, HEIGHT - (curb_y + 1)))
 
-            pygame.draw.rect(self.screen, color,
-                             (spot.x - spot.width // 2, spot.y - spot.length // 2,
-                              spot.width, spot.length), 3)
+        # Отметка основной линии (пунктирная)
+        if self.show_alignment_lines:
+            for i in range(0, WIDTH, 40):
+                pygame.draw.line(self.screen, (255, 255, 100, 150),
+                                 (i, curb_y), (i + 20, curb_y), 2)
 
-            if not spot.occupied:
-                p_text = self.small_font.render("P", True, (0, 220, 0))
-                self.screen.blit(p_text, (spot.x - 5, spot.y - 10))
-
-            if spot == self.selected_spot:
-                target_text = self.small_font.render("ЦЕЛЬ", True, (255, 255, 0))
-                self.screen.blit(target_text, (spot.x - 15, spot.y - 80))
-
-        # Препятствия
+        # Машины-препятствия (без датчиков, так как они стоят)
+        # Не рисуем виртуальные границы (те, что за пределами экрана)
         for car in self.obstacle_cars:
-            car.draw(self.screen)
+            # Пропускаем виртуальные границы за пределами экрана
+            if car.x < -50 or car.x > WIDTH + 50:
+                continue
+            car.draw(self.screen, draw_sensors=False)
 
-        # Основной автомобиль
-        self.player_car.draw(self.screen)
+        # Игрок (с датчиками если включено)
+        self.player_car.draw(self.screen,
+                             draw_sensors=self.show_sensors,
+                             show_labels=self.show_labels)
 
-        # Визуализация цели
-        if self.selected_spot:
-            # Линия к цели
+        # Визуализация основной линии выравнивания
+        if self.show_alignment_lines and self.controller.phase in [ParkingPhase.REVERSE_RIGHT,
+                                                                   ParkingPhase.REVERSE_LEFT,
+                                                                   ParkingPhase.FINAL_ADJUST] and self.show_labels:
+            line_y = self.controller.target_line_y
+
+            # Рисуем саму линию выравнивания
+            line_color = (100, 255, 100, 200)
+            pygame.draw.line(self.screen, line_color, (0, line_y), (WIDTH, line_y), 2)
+
+            # Подписываем линию
+            line_text = self.ui_font.render(f"Линия выравнивания (y={line_y})", True, line_color)
+            self.screen.blit(line_text, (WIDTH // 2 - 100, line_y - 25))
+
+            # Визуализация расстояния от углов машины до линии
+            corners = self.player_car.get_corners()
+            for corner in corners:
+                pygame.draw.line(self.screen, (255, 100, 100, 150),
+                                 (corner[0], corner[1]), (corner[0], line_y), 1)
+
+            # Показываем расстояние до линии (минимальное от углов)
+            line_distance, line_angle = self.player_car.get_line_alignment(line_y)
+            dist_color = (100, 255, 100) if line_distance < self.controller.alignment_tolerance else (255, 255, 100)
+            dist_text = self.ui_font.render(f"До линии (углы): {line_distance:.0f}", True, dist_color)
+            self.screen.blit(dist_text, (self.player_car.x + 30, self.player_car.y - 40))
+
+            # Показываем угол отклонения
+            angle_text = self.ui_font.render(f"Угол к линии: {line_angle:.1f}°", True, dist_color)
+            self.screen.blit(angle_text, (self.player_car.x + 30, self.player_car.y - 60))
+
+        # Визуализация выбранного места
+        if self.controller.target_spot and self.show_labels:
+            spot = self.controller.target_spot
+
             pygame.draw.line(self.screen, (255, 255, 0, 150),
                              (self.player_car.x, self.player_car.y),
-                             (self.selected_spot.x, self.selected_spot.y), 2)
+                             (spot.x, spot.y), 2)
 
-            # Зона позиционирования
-            pos_y = self.selected_spot.y - CAR_WIDTH * 1.5
-            pygame.draw.line(self.screen, (255, 200, 0, 100),
-                             (self.selected_spot.x - 100, pos_y),
-                             (self.selected_spot.x + 200, pos_y), 2)
+        # UI
+        self.draw_ui()
 
-            # Целевая точка
-            target_x = self.selected_spot.x + CAR_LENGTH * 1.5
-            pygame.draw.circle(self.screen, (255, 100, 0),
-                               (int(target_x), int(pos_y)), 6)
+        # Окно справки (показывается только при паузе)
+        if self.show_help:
+            self.draw_help_window()
 
-        # Интерфейс
-        self.draw_expert_system_ui()
+        # Сообщение об успешной парковке
+        if self.controller.phase == ParkingPhase.PARKED and self.controller.parking_complete:
+            self.draw_success_message()
 
-    def draw_expert_system_ui(self):
-        """Отрисовка интерфейса"""
-        # Фон для интерфейса
-        pygame.draw.rect(self.screen, (40, 40, 50, 200), (0, 0, WIDTH, 180))
+        # НОВОЕ: Отображение сообщения о паузе
+        if self.paused:
+            self.draw_pause_message()
+
+    def draw_ui(self):
+        # Если надписи выключены, рисуем только нижние две надписи
+        if not self.show_labels:
+            # Управление внизу экрана (только две надписи)
+            controls_y = HEIGHT - 50
+            controls = [
+                "R - ПЕРЕЗАПУСК",
+                "H - ПАУЗА/СПРАВКА"
+            ]
+
+            control_width = WIDTH // len(controls)
+            for i, control in enumerate(controls):
+                control_text = self.ui_font.render(control, True, (41, 49, 51))
+                x_pos = i * control_width + control_width // 2 - control_text.get_width() // 2
+                self.screen.blit(control_text, (x_pos, controls_y))
+            return
 
         y_offset = 20
 
         # Заголовок
-        title = self.font.render("ЭКСПЕРТНАЯ СИСТЕМА ПАРКОВКИ - В РАБОТЕ", True, (255, 255, 200))
+        title = self.ui_font.render("ПАРАЛЛЕЛЬНАЯ ПАРКОВКА", True, (255, 255, 200))
         self.screen.blit(title, (WIDTH // 2 - title.get_width() // 2, y_offset))
         y_offset += 40
 
-        # Текущая фаза
-        phase_text = self.font.render(f"ФАЗА: {self.current_phase.value.upper()}", True, (255, 200, 100))
-        self.screen.blit(phase_text, (50, y_offset))
+        # Информация об управлении
+        control_box = pygame.Rect(50, y_offset, WIDTH - 100, 100)
+        pygame.draw.rect(self.screen, (60, 70, 60), control_box, border_radius=5)
+        pygame.draw.rect(self.screen, (100, 150, 100), control_box, 2, border_radius=5)
 
-        # Время фазы
-        time_text = self.small_font.render(f"Время: {self.phase_timer:.1f}с", True, (200, 200, 200))
-        self.screen.blit(time_text, (WIDTH - 150, y_offset))
-        y_offset += 35
+        speed_color = (200, 255, 200) if self.player_car.speed > 0 else (
+            (255, 200, 200) if self.player_car.speed < 0 else (200, 200, 200))
 
-        # Активное правило
-        rule_box = pygame.Rect(50, y_offset, WIDTH - 100, 60)
-        pygame.draw.rect(self.screen, (60, 70, 60), rule_box, border_radius=5)
-        pygame.draw.rect(self.screen, (100, 150, 100), rule_box, 2, border_radius=5)
+        speed_text = self.ui_font.render(f"Скорость: {self.player_car.speed:.2f}",
+                                         True, speed_color)
+        self.screen.blit(speed_text, (70, y_offset + 20))
 
-        rule_title = self.small_font.render("АКТИВНОЕ ПРАВИЛО:", True, (200, 255, 200))
-        self.screen.blit(rule_title, (70, y_offset + 10))
+        steer_text = self.ui_font.render(f"Руль: {self.player_car.steering:.1f}°",
+                                         True, (220, 220, 200))
+        self.screen.blit(steer_text, (70, y_offset + 50))
 
-        rule_name = self.font.render(f"{self.rule_applied}", True, (220, 255, 220))
-        self.screen.blit(rule_name, (70, y_offset + 30))
-        y_offset += 70
-
-        # Левая колонка - управление
-        left_col = 50
-        control_text = self.small_font.render("УПРАВЛЕНИЕ:", True, (200, 220, 255))
-        self.screen.blit(control_text, (left_col, y_offset))
-
-        speed_color = (200, 255, 200) if self.player_car.speed > 0 else (255, 200,
-                                                                         200) if self.player_car.speed < 0 else (200,
-                                                                                                                 200,
-                                                                                                                 200)
-        speed_text = self.small_font.render(f"Скорость: {self.player_car.speed:.2f}", True, speed_color)
-        self.screen.blit(speed_text, (left_col + 20, y_offset + 25))
-
-        steer_text = self.small_font.render(f"Руль: {self.player_car.steering:.1f}°", True, (220, 220, 200))
-        self.screen.blit(steer_text, (left_col + 20, y_offset + 45))
-
-        # Правая колонка - обоснование
-        right_col = WIDTH // 2 + 50
-        reason_text = self.small_font.render("ОБОСНОВАНИЕ:", True, (255, 220, 200))
-        self.screen.blit(reason_text, (right_col, y_offset))
-
-        reasoning = self.decision_info.get("reasoning", "Ожидание...")
+        reasoning = self.controller.debug_info.get('Reasoning', '')
         if len(reasoning) > 35:
             reasoning = reasoning[:35] + "..."
-        reason_content = self.small_font.render(reasoning, True, (255, 240, 200))
-        self.screen.blit(reason_content, (right_col + 20, y_offset + 25))
 
-        # Позиция автомобиля (правый верхний угол)
-        pos_y = 20
-        pos_box = pygame.Rect(WIDTH - 300, pos_y, 280, 100)
-        pygame.draw.rect(self.screen, (50, 50, 70, 200), pos_box)
-        pygame.draw.rect(self.screen, (100, 100, 150), pos_box, 2)
+        reason_color = (255, 240, 200)
+        reason_text = self.ui_font.render(f"Действие: {reasoning}", True, reason_color)
+        self.screen.blit(reason_text, (WIDTH // 2 + 50, y_offset + 20))
 
-        pos_title = self.small_font.render("ПОЗИЦИЯ АВТО:", True, (200, 220, 255))
-        self.screen.blit(pos_title, (WIDTH - 280, pos_y + 10))
+        # Фаза
+        phase_color = (255, 200, 100)
+        phase_label_text = self.ui_font.render(f"Фаза: {self.controller.phase.name}", True, phase_color)
+        self.screen.blit(phase_label_text, (WIDTH // 2 + 50, y_offset + 50))
 
-        pos_info = [
-            f"X: {self.player_car.x:.0f}",
-            f"Y: {self.player_car.y:.0f}",
-            f"Угол: {self.player_car.angle:.1f}°"
-        ]
-
-        for i, line in enumerate(pos_info):
-            line_text = self.small_font.render(line, True, (220, 220, 240))
-            self.screen.blit(line_text, (WIDTH - 280, pos_y + 35 + i * 18))
-
-        # Датчики
-        sensor_y = pos_y + 110
-        sensor_box = pygame.Rect(WIDTH - 300, sensor_y, 280, 120)
-        pygame.draw.rect(self.screen, (50, 70, 50, 200), sensor_box)
-        pygame.draw.rect(self.screen, (100, 150, 100), sensor_box, 2)
-
-        sensor_title = self.small_font.render("ДАКТЧИКИ:", True, (200, 255, 200))
-        self.screen.blit(sensor_title, (WIDTH - 280, sensor_y + 10))
-
-        sensor_names = ["Перед", "Прав", "Зад.пр", "Зад"]
-        sensor_values = [
-            self.current_sensors[3],  # Передний
-            self.current_sensors[5],  # Правый
-            self.current_sensors[6],  # Задний правый
-            self.current_sensors[7]   # Задний
-        ]
-
-        for i, (name, value) in enumerate(zip(sensor_names, sensor_values)):
-            sensor_x = WIDTH - 280 + (i % 2) * 120
-            sensor_y_pos = sensor_y + 35 + (i // 2) * 25
-
-            if value < 80:
-                color = (255, 150, 150)
-            elif value < 150:
-                color = (255, 255, 150)
-            else:
-                color = (150, 255, 150)
-
-            sensor_text = self.small_font.render(f"{name}: {value:.0f}", True, color)
-            self.screen.blit(sensor_text, (sensor_x, sensor_y_pos))
-
-        # Управление внизу
-        controls_y = HEIGHT - 70
-        pygame.draw.rect(self.screen, (40, 40, 60), (0, controls_y, WIDTH, 70))
-
+        # Управление внизу экрана
+        controls_y = HEIGHT - 50
         controls = [
             "R - ПЕРЕЗАПУСК",
-            "S - СОХРАНИТЬ ЛОГ",
-            "SPACE - СЛЕД.ФАЗА",
-            "P - СТАТИСТИКА",
-            "D - ОТЛАДКА"
+            "H - ПАУЗА/СПРАВКА"
         ]
 
         control_width = WIDTH // len(controls)
         for i, control in enumerate(controls):
-            control_text = self.small_font.render(control, True, (180, 200, 220))
+            control_text = self.ui_font.render(control, True, (41, 49, 51))
             x_pos = i * control_width + control_width // 2 - control_text.get_width() // 2
-            self.screen.blit(control_text, (x_pos, controls_y + 15))
+            self.screen.blit(control_text, (x_pos, controls_y))
 
-        # Статистика
-        total_time = (pygame.time.get_ticks() - self.start_time) / 1000.0
-        stats_text = self.small_font.render(
-            f"Решений: {len(self.expert_system.decision_history)} | " +
-            f"Время: {total_time:.1f}с | " +
-            f"Фаза: {self.phase_timer:.1f}с",
-            True, (150, 180, 200)
-        )
-        self.screen.blit(stats_text, (WIDTH // 2 - stats_text.get_width() // 2, controls_y + 40))
+    def draw_help_window(self):
+        # Полупрозрачный фон
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        self.screen.blit(overlay, (0, 0))
+
+        # Окно справки
+        help_rect = pygame.Rect(WIDTH // 2 - 350, HEIGHT // 2 - 200, 730, 420)
+        pygame.draw.rect(self.screen, (30, 40, 50), help_rect, border_radius=10)
+        pygame.draw.rect(self.screen, (100, 150, 200), help_rect, 3, border_radius=10)
+
+        # Заголовок - ИЗМЕНЕНО: добавлено "ПАУЗА"
+        title = self.ui_font.render("СПРАВКА ПО УПРАВЛЕНИЮ", True, (255, 255, 200))
+        self.screen.blit(title, (help_rect.centerx - title.get_width() // 2, help_rect.top + 20))
+
+        # Список команд - ИЗМЕНЕНО: теперь H для паузы
+        commands = [
+            ("R", "Перезапуск"),
+            ("H", "Справка"),
+            ("S", "Лучи датчиков"),
+            ("A", "Линии выравнивания"),
+            ("N", "Скрыть/показать надписи"),
+            ("", ""),
+            ("ФАЗЫ ПАРКОВКИ:", ""),
+            ("SEARCHING", "Поиск парковочного места"),
+            ("APPROACH", "Подъезд к месту"),
+            ("POSITIONING", "Позиционирование для маневра"),
+            ("REVERSE_RIGHT", "Задний ход с поворотом вправо"),
+            ("REVERSE_LEFT", "Задний ход с поворотом влево"),
+            ("FINAL_ADJUST", "5 циклов выравнивания вперед-назад"),
+            ("PARKED", "Парковка завершена (время остановлено)"),
+            ("", ""),
+        ]
+
+        y_offset = help_rect.top + 70
+        for key, desc in commands:
+            if key == "" and desc == "":
+                y_offset += 10
+                continue
+
+            if "ФАЗЫ" in key or "ОСОБЕННОСТИ" in key:
+                # Подзаголовок
+                text = self.ui_font.render(key, True, (255, 200, 100))
+                self.screen.blit(text, (help_rect.left + 30, y_offset))
+                y_offset += 25
+            else:
+                key_text = self.ui_font.render(f"{key}:", True, (200, 220, 255))
+                self.screen.blit(key_text, (help_rect.left + 30, y_offset))
+
+                desc_text = self.ui_font.render(desc, True, (220, 240, 255))
+                self.screen.blit(desc_text, (help_rect.left + 200, y_offset))
+                y_offset += 25
 
     def draw_success_message(self):
-        """Отрисовка сообщения об успешной парковке"""
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))
         self.screen.blit(overlay, (0, 0))
@@ -1135,60 +1720,24 @@ class ParkingSimulation:
         pygame.draw.rect(self.screen, (30, 60, 30), success_box, border_radius=10)
         pygame.draw.rect(self.screen, (100, 200, 100), success_box, 4, border_radius=10)
 
-        success_text = self.font.render("ПАРКОВКА ЗАВЕРШЕНА!",
-                                        True, (100, 255, 100))
+        success_text = self.ui_font.render("ПАРКОВКА ЗАВЕРШЕНА!", True, (100, 255, 100))
         self.screen.blit(success_text,
                          (WIDTH // 2 - success_text.get_width() // 2, HEIGHT // 2 - 70))
 
-        rules_used = len(set([d.get("rule_applied") for d in self.expert_system.decision_history]))
-        total_time = (pygame.time.get_ticks() - self.start_time) / 1000.0
-
-        stats_lines = [
-            f"Использовано правил: {rules_used}",
-            f"Всего решений: {len(self.expert_system.decision_history)}",
-            f"Общее время: {total_time:.1f} секунд"
-        ]
-
-        for i, line in enumerate(stats_lines):
-            line_text = self.small_font.render(line, True, (200, 255, 200))
-            self.screen.blit(line_text,
-                             (WIDTH // 2 - line_text.get_width() // 2, HEIGHT // 2 - 30 + i * 25))
-
-        restart_text = self.small_font.render(
-            "Нажмите R для новой парковки",
-            True, (150, 255, 150)
-        )
+        restart_text = self.ui_font.render("Нажмите R для новой парковки",
+                                           True, (150, 255, 150))
         self.screen.blit(restart_text,
                          (WIDTH // 2 - restart_text.get_width() // 2, HEIGHT // 2 + 50))
 
-    def save_decision_log(self):
-        """Сохранение лога решений"""
-        try:
-            filename = f"parking_log_{pygame.time.get_ticks()}.json"
-            with open(filename, "w", encoding="utf-8") as f:
-                log_data = []
-                for entry in self.expert_system.decision_history:
-                    log_entry = {
-                        "phase": entry["phase"],
-                        "rule": entry.get("rule_applied", "unknown"),
-                        "reasoning": entry["decision"].get("reasoning", ""),
-                        "throttle": entry["decision"].get("throttle", 0),
-                        "steering": entry["decision"].get("steering", 0),
-                        "position": entry["position"],
-                        "angle": entry["angle"]
-                    }
-                    log_data.append(log_entry)
-
-                json.dump(log_data, f, indent=2, ensure_ascii=False)
-                print(f"\n✓ Лог сохранен в файл: {filename}")
-                print(f"   Записей: {len(log_data)}")
-
-        except Exception as e:
-            print(f"\n✗ Ошибка сохранения: {e}")
+    def draw_pause_message(self):
+        # Полупрозрачный фон
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 120))
+        self.screen.blit(overlay, (0, 0))
 
 
 def main():
-    simulation = ParkingSimulation()
+    simulation = HybridParkingSimulation()
     simulation.run()
 
 
